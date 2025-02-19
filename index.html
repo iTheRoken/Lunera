@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Player</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <canvas id="visualizer"></canvas>
+        <!-- Barra de título personalizada -->
+        <div class="titlebar">
+            <div class="drag-area"></div>
+            <div class="window-controls">
+                <button id="minimizeBtn" class="control-btn"><i class="fas fa-minus"></i></button>
+                <button id="maximizeBtn" class="control-btn"><i class="fas fa-square"></i></button>
+                <button id="closeBtn" class="control-btn"><i class="fas fa-times"></i></button>
+            </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">
+                <img src="assets/logo.png" alt="Logo" height="40">
+            </div>
+            
+            <nav>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a href="#" class="nav-link active" data-page="home">
+                            <i class="fas fa-home"></i>
+                            <span>Inicio</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="search">
+                            <i class="fas fa-search"></i>
+                            <span>Buscar</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="library">
+                            <i class="fas fa-book"></i>
+                            <span>Tu Biblioteca</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="playlist-section">
+                <button class="create-playlist-btn">
+                    <i class="fas fa-plus"></i>
+                    <span>Crear playlist</span>
+                </button>
+                <div class="playlists-container">
+                    <!-- Las playlists se agregarán dinámicamente aquí -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Contenido principal -->
+        <main class="main-content">
+            <div id="home" class="page active">
+                <h1>Bienvenido de nuevo</h1>
+                <div class="recently-played">
+                    <h2>Reproducido recientemente</h2>
+                    <div class="tracks-grid" id="recentTracks">
+                        <!-- Canciones recientes se agregarán aquí -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="search" class="page">
+                <div class="search-container">
+                    <div class="search-input-wrapper">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="searchInput" class="search-input" placeholder="¿Qué quieres escuchar?">
+                    </div>
+                </div>
+                <div class="search-results" id="searchResults">
+                    <!-- Resultados de búsqueda se agregarán aquí -->
+                </div>
+            </div>
+
+            <div id="library" class="page">
+                <div class="library-header">
+                    <h1>Tu Biblioteca</h1>
+                    <div class="library-filters">
+                        <button class="filter-btn active">Playlists</button>
+                        <button class="filter-btn">Canciones</button>
+                    </div>
+                </div>
+                <div class="library-content" id="libraryContent">
+                    <!-- Contenido de la biblioteca se agregará aquí -->
+                </div>
+            </div>
+        </main>
+
+
+        <!-- Barra de reproducción -->
+        <div class="now-playing-bar">
+            <div class="track-info">
+                <img src="assets/default-track.png" id="currentTrackImg" class="track-image" alt="Track">
+                <div class="track-details">
+                    <span id="currentTrackTitle" class="track-title">No hay canción seleccionada</span>
+                    <span id="currentTrackArtist" class="track-artist">-</span>
+                </div>
+                <button class="like-button" id="likeButton">
+                    <i class="far fa-heart"></i>
+                </button>
+            </div>
+
+            <div class="player-controls">
+                <div class="control-buttons">
+                    <button class="control-button" id="shuffleButton">
+                        <i class="fas fa-random"></i>
+                    </button>
+                    <button class="control-button" id="previousButton">
+                        <i class="fas fa-step-backward"></i>
+                    </button>
+                    <button class="control-button play-button" id="playPauseButton">
+                        <i class="fas fa-play"></i>
+                    </button>
+                    <button class="control-button" id="nextButton">
+                        <i class="fas fa-step-forward"></i>
+                    </button>
+                    <button class="control-button" id="repeatButton">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+                <div class="progress-container">
+                    <span id="currentTime">0:00</span>
+                    <div class="progress-bar">
+                        <div class="progress" id="progressBar"></div>
+                    </div>
+                    <span id="totalTime">0:00</span>
+                </div>
+            </div>
+
+            <div class="volume-controls">
+                <button class="control-button" id="volumeButton">
+                    <i class="fas fa-volume-up"></i>
+                </button>
+                <div class="volume-bar">
+                    <div class="volume-progress" id="volumeProgress"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audio element (oculto) -->
+        <audio id="audioPlayer"></audio>
+    </div>
+
+    <script src="background.js"></script>
+    <script src="renderer.js"></script>
+    <script>
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.register("sw.js")
+            .then(() => console.log("Service Worker registrado"))
+            .catch((error) => console.log("Error en el registro:", error));
+        }
+      </script>      
+</body>
+</html>
