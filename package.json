@@ -1,0 +1,44 @@
+{
+  "name": "roken-music",
+  "version": "1.0.0-test",
+  "description": "Reproductor de música",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^7.0.1",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.0.1",
+    "@distube/ytdl-core": "^4.16.4",
+    "electron-store": "^8.1.0",
+    "node-fetch": "^2.6.7",
+    "undici": "^7.3.0",
+    "usetube": "^2.2.7"
+  },
+  "build": {
+    "appId": "com.RokMusic.electron",
+    "productName": "RokMusic",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules/.bin",
+      "!node_modules/electron",
+      "!node_modules/electron-builder"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    }
+  },
+  "devDependencies": {
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8"
+  }
+}
