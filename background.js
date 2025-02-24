@@ -1,133 +1,204 @@
-// Configuración del canvas
+// Configuración del canvas y variables globales
 const canvas = document.getElementById('visualizer');
-const ctx = canvas.getContext('2d');
+const ctx = canvas ? canvas.getContext('2d') : null;
 let audioContext, analyser, dataArray;
 let isInitialized = false;
+let animationFrameId;
+let showVisualizer = true; // Valor predeterminado, se actualizará desde renderer.js
 
-// Configuración de los puntos de degradado con más variación
-const gradientPoints = [
-    { x: 0.2, y: 0.3, radius: 150, color: '#1db954' },
-    { x: 0.8, y: 0.4, radius: 200, color: '#1ed760' },
-    { x: 0.5, y: 0.7, radius: 180, color: '#1db954' },
-    { x: 0.1, y: 0.8, radius: 120, color: '#1ed760' },
-    { x: 0.9, y: 0.2, radius: 160, color: '#1db954' }
+const backgroundGradients = [
+    { x: 0.2, y: 0.3, baseRadius: 200, color: '#1db954', speed: 0.5 },
+    { x: 0.8, y: 0.4, baseRadius: 250, color: '#1ed760', speed: 0.7 },
+    { x: 0.5, y: 0.6, baseRadius: 300, color: '#1db954', speed: 0.3 }
 ];
 
-function initializeVisualizer() {
-    if (isInitialized) return;
-    
-    // Ajustar tamaño del canvas al tamaño de la ventana
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+function setupCanvas() {
+    if (!canvas) {
+        console.error('Canvas #visualizer no encontrado');
+        return;
     }
-    
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    // Configurar el contexto de audio con mayor sensibilidad
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048; // Aumentado para mayor detalle
-    analyser.smoothingTimeConstant = 0.85; // Suavizado para transiciones más fluidas
-    
-    const bufferLength = analyser.frequencyBinCount;
-    dataArray = new Uint8Array(bufferLength);
-    
-    const audioElement = document.getElementById('audioPlayer');
-    const source = audioContext.createMediaElementSource(audioElement);
-    source.connect(analyser);
-    analyser.connect(audioContext.destination);
-    
-    isInitialized = true;
-    animate();
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    console.log('Canvas configurado:', canvas.width, canvas.height);
 }
 
-function animate() {
-    requestAnimationFrame(animate);
-    
-    if (!analyser) return;
-    
-    analyser.getByteFrequencyData(dataArray);
-    
-    // Limpieza del canvas con efecto de desvanecimiento
-    ctx.fillStyle = 'rgba(18, 18, 18, 0.1)'; // Reducido el alpha para mejor trail
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+function initializeAudioContext() {
+    if (isInitialized) return;
 
-    // Calcular promedios de frecuencia con rangos más precisos
-    const bassAvg = getFrequencyRangeAverage(0, 100);
-    const midAvg = getFrequencyRangeAverage(101, 500);
-    const trebleAvg = getFrequencyRangeAverage(501, 1023);
+    try {
+        console.log('Inicializando AudioContext...');
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 1024; // Aumentamos para capturar más datos de audio
+        analyser.smoothingTimeConstant = 0.2; // Más respuesta dinámica
 
-    // Dibujar los degradados con animación mejorada
-    gradientPoints.forEach((point, index) => {
-        let intensity;
-        // Asignar diferentes rangos de frecuencia a cada punto
-        if (index % 3 === 0) {
-            intensity = bassAvg * 2.5; // Amplificar bajos
-        } else if (index % 3 === 1) {
-            intensity = midAvg * 2.0; // Amplificar medios
-        } else {
-            intensity = trebleAvg * 1.5; // Amplificar agudos
+        const audioElement = document.getElementById('audioPlayer');
+        if (!audioElement) {
+            console.error('Elemento #audioPlayer no encontrado');
+            return;
         }
 
-        // Calcular posición con movimiento suave
-        const time = Date.now() * 0.001;
-        const x = point.x * canvas.width + Math.sin(time + index) * 100;
-        const y = point.y * canvas.height + Math.cos(time + index) * 100;
-        
-        // Radio dinámico basado en la intensidad
-        const radius = point.radius * (1 + intensity / 255 * 1.5);
-        
-        // Crear degradado radial con opacidad dinámica
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        const alpha = Math.min(0.9, intensity / 255);
-        
-        gradient.addColorStop(0, `${point.color}${Math.floor(alpha * 255).toString(16).padStart(2, '0')}`);
-        gradient.addColorStop(1, 'rgba(29, 185, 84, 0)');
+        const source = audioContext.createMediaElementSource(audioElement);
+        source.connect(analyser);
+        analyser.connect(audioContext.destination);
 
-        // Dibujar el degradado
-        ctx.fillStyle = gradient;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        isInitialized = true;
+
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => console.log('AudioContext reanudado'));
+        } else {
+            console.log('AudioContext iniciado en estado:', audioContext.state);
+        }
+    } catch (error) {
+        console.error('Error al inicializar AudioContext:', error);
+    }
+}
+
+function getAudioData() {
+    if (!analyser) return null;
+    analyser.getByteFrequencyData(dataArray);
+    const bass = average(dataArray.slice(0, 64)); // Más rango para bajos
+    const mids = average(dataArray.slice(64, 256));
+    const treble = average(dataArray.slice(256, 512));
+    return { bass, mids, treble };
+}
+
+function average(array) {
+    return array.reduce((a, b) => a + b, 0) / array.length || 0.1; // Valor mínimo para visibilidad
+}
+
+function drawBackground(audioData) {
+    if (!ctx || !showVisualizer) return;
+
+    ctx.fillStyle = 'rgba(18, 18, 18, 0.05)'; // Fondo más transparente para mayor visibilidad
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (!audioData) {
+        drawStaticBackground();
+        return;
+    }
+
+    backgroundGradients.forEach((gradient, index) => {
+        const time = Date.now() * gradient.speed * 0.001;
+        const x = canvas.width * gradient.x + Math.sin(time) * 50;
+        const y = canvas.height * gradient.y + Math.cos(time) * 50;
+
+        let radius = gradient.baseRadius;
+        let intensity = 0;
+
+        if (index === 0) {
+            intensity = Math.min(1, audioData.bass / 128); // Ajustamos la escala para más impacto
+            radius *= 1 + (intensity * 3.0); // Mayor expansión para bajos
+        } else if (index === 1) {
+            intensity = Math.min(1, audioData.mids / 128);
+            radius *= 1 + (intensity * 2.0);
+        } else {
+            intensity = Math.min(1, audioData.treble / 128);
+            radius *= 1 + (intensity * 1.5);
+        }
+
+        if (intensity <= 0) intensity = 0.1; // Mínimo para evitar valores nulos
+
+        const grd = ctx.createRadialGradient(x, y, 0, x, y, radius);
+        const alpha = Math.max(0.7, intensity * 2.0); // Mayor opacidad para visibilidad
+        const colorHex = gradient.color.slice(1); // Quitamos el '#'
+        const r = parseInt(colorHex.substr(0, 2), 16);
+        const g = parseInt(colorHex.substr(2, 2), 16);
+        const b = parseInt(colorHex.substr(4, 2), 16);
+        grd.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha})`);
+        grd.addColorStop(0.7, `rgba(${r}, ${g}, ${b}, ${alpha * 0.2})`); // Reducimos opacidad para el fade
+        grd.addColorStop(1, 'rgba(18, 18, 18, 0)');
+
+        ctx.fillStyle = grd;
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fill();
     });
 }
 
-function getFrequencyRangeAverage(start, end) {
-    let sum = 0;
-    let count = 0;
-    for (let i = start; i <= end; i++) {
-        sum += dataArray[i];
-        count++;
-    }
-    return sum / count;
+function drawStaticBackground() {
+    if (!ctx || !showVisualizer) return;
+
+    backgroundGradients.forEach((gradient) => {
+        const x = canvas.width * gradient.x;
+        const y = canvas.height * gradient.y;
+        const grd = ctx.createRadialGradient(x, y, 0, x, y, gradient.baseRadius);
+        grd.addColorStop(0, `${gradient.color}0A`); // Más tenue para contraste
+        grd.addColorStop(1, 'rgba(18, 18, 18, 0)');
+        ctx.fillStyle = grd;
+        ctx.beginPath();
+        ctx.arc(x, y, gradient.baseRadius, 0, Math.PI * 2);
+        ctx.fill();
+        console.log('Dibujando fondo estático');
+    });
 }
 
-// Inicializar el visualizador cuando se carga la página
-document.addEventListener('DOMContentLoaded', () => {
-    const audioElement = document.getElementById('audioPlayer');
-    
-    // Inicializar cuando se reproduce por primera vez
-    audioElement.addEventListener('play', () => {
-        if (audioContext && audioContext.state === 'suspended') {
-            audioContext.resume();
-        }
-        if (!isInitialized) {
-            initializeVisualizer();
-        }
-    });
+function animate() {
+    if (!showVisualizer) {
+        return; // No logueamos para evitar saturación
+    }
+    animationFrameId = requestAnimationFrame(animate);
+    const audioData = getAudioData();
+    drawBackground(audioData);
+}
 
-    // Manejar el botón de reproducción
+// Función para actualizar el estado del visualizador desde renderer.js
+function updateVisualizerState(shouldShow) {
+    showVisualizer = shouldShow;
+    console.log('Estado del visualizador actualizado:', showVisualizer);
+    if (shouldShow && isInitialized) {
+        animate();
+    }
+}
+
+window.addEventListener('resize', setupCanvas);
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupCanvas();
+    drawStaticBackground();
+    console.log('DOM cargado, fondo estático dibujado');
+
+    const audioElement = document.getElementById('audioPlayer');
     const playPauseButton = document.getElementById('playPauseButton');
+
+    if (audioElement) {
+        audioElement.addEventListener('play', () => {
+            console.log('Evento play disparado');
+            if (!isInitialized) {
+                initializeAudioContext();
+            } else if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().then(() => console.log('AudioContext reanudado tras play'));
+            }
+            if (showVisualizer) {
+                animate();
+            }
+        });
+    }
+
     if (playPauseButton) {
         playPauseButton.addEventListener('click', () => {
-            if (audioContext && audioContext.state === 'suspended') {
-                audioContext.resume();
-            }
+            console.log('Botón play/pause clickeado');
             if (!isInitialized) {
-                initializeVisualizer();
+                initializeAudioContext();
+            } else if (audioContext && audioContext.state === 'suspended') {
+                audioContext.resume().then(() => console.log('AudioContext reanudado tras click'));
             }
         });
     }
 });
+
+function cleanup() {
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
+    if (audioContext) {
+        audioContext.close().catch(error => console.error('Error cerrando AudioContext:', error));
+    }
+    console.log('Limpieza de recursos completada');
+}
+
+window.addEventListener('beforeunload', cleanup);
+
+// Exponer updateVisualizerState para que renderer.js pueda llamarlo
+window.updateVisualizerState = updateVisualizerState;
