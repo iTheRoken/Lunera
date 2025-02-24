@@ -1,3 +1,5 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
+
 :root {
   --primary-color: #1db954;
   --primary-dark: #1aa34a;
@@ -8,8 +10,6 @@
   --text-secondary: #b3b3b3;
   --transition-default: all 0.3s ease;
 }
-
-@import url("https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap");
 
 * {
   margin: 0;
@@ -190,7 +190,7 @@ h3 {
   border-radius: 10px;
 }
 
-/* Modificar resultados de musica a flex 1ly */
+/* Modificar resultados de música a flex */
 .search-results-grid {
   display: flex;
   gap: 10px;
@@ -205,7 +205,7 @@ h3 {
 
 /* Track Cards */
 .track-card {
-  flex: 0 0 100px; /* Cambiado de grid a flex 1ly */
+  flex: 0 0 100px;
   max-width: 200px;
   background: var(--background-light);
   padding: 1rem;
@@ -252,8 +252,9 @@ h3 {
   left: 0;
   width: 100%;
   height: 100%;
-  z-index: -1;
+  z-index: -1; /* Aseguramos que esté detrás, pero visible */
   pointer-events: none;
+  opacity: 1; /* Aseguramos visibilidad completa */
 }
 
 /* Now Playing Bar */
@@ -605,5 +606,338 @@ h3 {
 
 .card-controls {
   display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+/* Configuración, GIFs y Visualizador */
+.settings-content {
+    padding: 20px;
+}
+
+.settings-section {
+    background: var(--background-light);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--background-dark);
+}
+
+.setting-info {
+    flex: 1;
+}
+
+.setting-title {
+    display: block;
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.setting-description {
+    display: block;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* Switch Toggle */
+.switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+}
+
+.switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--background-dark);
+    transition: .4s;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+}
+
+.switch input:checked + .slider {
+    background-color: var(--primary-color);
+}
+
+.switch input:checked + .slider:before {
+    transform: translateX(26px);
+}
+
+.slider.round {
+    border-radius: 34px;
+}
+
+.slider.round:before {
+    border-radius: 50%;
+}
+
+/* GIF Settings */
+.gif-settings {
+    margin-top: 15px;
+    padding: 15px;
+    background: var(--background-dark);
+    border-radius: 8px;
+}
+
+.gif-input {
+    display: none;
+}
+
+.upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: var(--transition-default);
+}
+
+.upload-btn:hover {
+    background: var(--primary-dark);
+}
+
+.gif-preview {
+    margin-top: 15px;
+    position: relative;
+    display: inline-block;
+}
+
+.gif-preview img {
+    max-width: 200px;
+    border-radius: 5px;
+}
+
+.remove-gif {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--background-dark);
+    border: none;
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Playing GIF Container */
+.playing-gif {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1001; /* Aumentamos para estar por encima del canvas (#visualizer z-index: -1) */
+  background: var(--background-dark);
+  padding: 10px;
+  border-radius: 10px;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+  max-width: 400px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.playing-gif img {
+  width: 100%;
+  border-radius: 5px;
+  object-fit: contain;
+}
+
+.close-gif {
+  position: absolute;
+  top: -12px;
+  right: -12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-default);
+}
+
+.close-gif:hover {
+  background: var(--primary-dark);
+  transform: scale(1.1);
+}
+
+/* Overlay para cuando el GIF está activo */
+.gif-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000; /* Aumentamos para estar por encima del canvas (#visualizer z-index: -1) */
+  display: none;
+}
+
+.gif-overlay.active {
+  display: block;
+}
+
+/* Queue Styles */
+.queue-button {
+  width: 32px;
+  height: 32px;
+  background: var(--background-light);
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-default);
+}
+
+.queue-button:hover {
+  color: var(--primary-color);
+  background: var(--background-darker);
+}
+
+.queue-container {
+  position: fixed;
+  bottom: 90px;
+  right: 20px;
+  width: 300px;
+  background: var(--background-dark);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000; /* Ajustamos para estar por encima del canvas */
+  display: none;
+}
+
+.queue-container.active {
+  display: block;
+}
+
+.queue-header {
+  display: flex;
   justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--background-light);
+}
+
+.queue-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.queue-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.queue-control-button {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  transition: var(--transition-default);
+}
+
+.queue-control-button:hover,
+.queue-control-button.active {
+  color: var(--primary-color);
+}
+
+.queue-items {
+  max-height: 300px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  padding: 8px;
+  gap: 8px;
+  border-radius: 6px;
+  transition: var(--transition-default);
+}
+
+.queue-item:hover {
+  background: var(--background-light);
+}
+
+.queue-item img {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.queue-item-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.queue-item-title {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-item-artist {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.queue-item-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 4px;
+  transition: var(--transition-default);
+}
+
+.queue-item-remove:hover {
+  color: #ff4444;
 }
