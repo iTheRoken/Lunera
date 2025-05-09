@@ -3,13 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Music Player</title>
+    <title>RokMusic</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https://*; connect-src 'self' https://*; font-src 'self' https://cdnjs.cloudflare.com;">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+    <!-- Pantalla de carga -->
+    <div id="loadingScreen" class="loading-screen">
+        <video id="loadingBackgroundVideo" autoplay loop muted playsinline>
+            <source src="assets/loading-background.mp4" type="video/mp4">
+            Tu navegador no soporta videos.
+        </video>
+        <div class="loading-overlay"></div>
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2 id="loadingMessage">Inicializando...</h2>
+        </div>
+    </div>
+
+    <!-- Pantalla intermedia con "Hola" -->
+    <div id="welcomeScreen" class="welcome-screen">
+        <div class="welcome-content">
+            <h1 class="welcome-text">Hola</h1>
+        </div>
+    </div>
+
+    <!-- Menú de creación de cuenta e inicio de sesión para usuarios -->
+    <div id="signupScreen" class="signup-screen">
+        <video id="backgroundVideo" autoplay loop muted playsinline>
+            <source src="assets/background-video.mp4" type="video/mp4">
+            Tu navegador no soporta videos.
+        </video>
+        <div class="signup-overlay"></div>
+        <div class="signup-content">
+            <h1>¡Bienvenido a RokMusic!</h1>
+            <p id="signupMessage">Crear una cuenta te permite guardar playlists y personalizar tu experiencia.</p>
+            <div class="auth-tabs">
+                <button id="signupTab" class="auth-tab active">Crear cuenta</button>
+                <button id="loginTab" class="auth-tab">Iniciar sesión</button>
+            </div>
+            <form id="authForm">
+                <div class="form-group">
+                    <label for="username">Nombre de usuario</label>
+                    <input type="text" id="username" placeholder="Ingresa tu nombre de usuario" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Correo electrónico</label>
+                    <input type="email" id="email" placeholder="Ingresa tu correo electrónico" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña</label>
+                    <input type="password" id="password" placeholder="Ingresa tu contraseña" required>
+                </div>
+                <button type="submit" class="signup-btn" id="authSubmitBtn">Crear cuenta</button>
+                <button type="button" id="skipSignup" class="skip-btn">Omitir por ahora</button>
+            </form>
+        </div>
+    </div>
+    
     <div class="app-container">
-        <canvas id="visualizer"></canvas>
+        <canvas id="visualizer" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none;"></canvas>
+        <!-- GIF Container -->
+        <div class="gif-overlay"></div>
+        <div id="playingGif" class="playing-gif" style="display: none;">
+            <img src="" alt="Playing Animation">
+            <button class="close-gif">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
         <!-- Barra de título personalizada -->
         <div class="titlebar">
             <div class="drag-area"></div>
@@ -46,17 +108,19 @@
                             <span>Tu Biblioteca</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="settings">
+                            <i class="fas fa-cog"></i>
+                            <span>Configuración</span>
+                        </a>
+                    </li>
                 </ul>
             </nav>
 
-            <div class="playlist-section">
-                <button class="create-playlist-btn">
-                    <i class="fas fa-plus"></i>
-                    <span>Crear playlist</span>
-                </button>
-                <div class="playlists-container">
-                    <!-- Las playlists se agregarán dinámicamente aquí -->
-                </div>
+            <div class="dedication-section">
+                <a href="#" class="dedication-link" id="dedicationLink">
+                    Hecho con ❤️ por Mateo Luciano Luppoli
+                </a>
             </div>
         </div>
 
@@ -89,15 +153,231 @@
                     <h1>Tu Biblioteca</h1>
                     <div class="library-filters">
                         <button class="filter-btn active">Playlists</button>
-                        <button class="filter-btn">Canciones</button>
-                    </div>
+                        <button class="filter-btn">Favoritos</button>
+                      </div>
                 </div>
                 <div class="library-content" id="libraryContent">
-                    <!-- Contenido de la biblioteca se agregará aquí -->
+                    <div class="playlist-section" id="playlistsSection">
+                      <h2>Playlists</h2>
+                      <button id="createPlaylistBtn" class="create-playlist-btn">
+                        <i class="fas fa-plus"></i> Crear nueva playlist
+                      </button>
+                      <div id="playlistsContainer">
+                        <p>No hay playlists. Crea una nueva.</p>
+                      </div>
+                    </div>
+                    <div class="favorites-section" id="favoritesSection" style="display: none;">
+                      <h2>Favoritos</h2>
+                      <div id="favoritesContainer">
+                        <p>No hay canciones en tus favoritos.</p>
+                      </div>
+                    </div>
+                  </div>
+            </div>
+
+            <div id="settings" class="page">
+                <div class="settings-header">
+                    <h1>Configuración</h1>
+                    <p class="settings-subtitle">Personaliza tu experiencia en RokMusic</p>
+                </div>
+                <div class="settings-content">
+                    <!-- Audio Settings -->
+                    <div class="settings-section">
+                        <h2><i class="fas fa-volume-up"></i> Configuración de Audio</h2>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Ecualizador</span>
+                                <span class="setting-description">Ajusta los niveles de frecuencia para personalizar el sonido</span>
+                            </div>
+                            <div class="setting-control">
+                                <button id="openEqualizerBtn" class="action-btn">Abrir Ecualizador</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Crossfade</span>
+                                <span class="setting-description">Transición suave entre canciones (0-10 segundos)</span>
+                            </div>
+                            <div class="setting-control">
+                                <input type="range" id="crossfadeSlider" min="0" max="10" value="0" class="slider-range">
+                                <span id="crossfadeValue">0s</span>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Normalización de Volumen</span>
+                                <span class="setting-description">Ajusta automáticamente el volumen entre canciones</span>
+                            </div>
+                            <div class="setting-control">
+                                <label class="switch">
+                                    <input type="checkbox" id="normalizeVolumeToggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visual Settings -->
+                    <div class="settings-section">
+                        <h2><i class="fas fa-eye"></i> Configuración Visual</h2>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Fondo Brillante</span>
+                                <span class="setting-description">Muestra un fondo animado que reacciona al ritmo de la música</span>
+                            </div>
+                            <div class="setting-control">
+                                <label class="switch">
+                                    <input type="checkbox" id="visualizerToggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">GIF de Reproducción</span>
+                                <span class="setting-description">Muestra un GIF animado durante la reproducción</span>
+                            </div>
+                            <div class="setting-control">
+                                <label class="switch">
+                                    <input type="checkbox" id="gifToggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="gif-settings" style="display: none;">
+                            <input type="file" id="gifInput" accept=".gif" class="gif-input">
+                            <button id="uploadGif" class="upload-btn">
+                                <i class="fas fa-upload"></i> Subir GIF
+                            </button>
+                            <div id="gifPreview" class="gif-preview">
+                                <img src="" alt="GIF Preview" style="display: none;">
+                                <button class="remove-gif">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Tema de la Interfaz</span>
+                                <span class="setting-description">Elige entre modo oscuro, claro o personalizado</span>
+                            </div>
+                            <div class="setting-control">
+                                <select id="themeSelector">
+                                    <option value="dark">Oscuro</option>
+                                    <option value="light">Claro</option>
+                                    <option value="custom">Personalizado</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Color de Acento</span>
+                                <span class="setting-description">Personaliza el color principal de la interfaz</span>
+                            </div>
+                            <div class="setting-control">
+                                <input type="color" id="accentColorPicker" value="#1db954">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Playback Settings -->
+                    <div class="settings-section">
+                        <h2><i class="fas fa-play-circle"></i> Configuración de Reproducción</h2>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Reproducción Automática</span>
+                                <span class="setting-description">Continúa reproduciendo canciones similares al terminar una lista</span>
+                            </div>
+                            <div class="setting-control">
+                                <label class="switch">
+                                    <input type="checkbox" id="autoplayToggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Cola Automática</span>
+                                <span class="setting-description">Añade recomendaciones automáticamente a la cola</span>
+                            </div>
+                            <div class="setting-control">
+                                <label class="switch">
+                                    <input type="checkbox" id="autoQueueToggle">
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Account Settings -->
+                    <div class="settings-section">
+                        <h2><i class="fas fa-user"></i> Configuración de Cuenta</h2>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Nombre de Usuario</span>
+                                <span class="setting-description">Actualiza tu nombre de usuario</span>
+                            </div>
+                            <div class="setting-control">
+                                <input type="text" id="usernameInput" placeholder="Tu nombre de usuario">
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Correo Electrónico</span>
+                                <span class="setting-description">Actualiza tu correo electrónico</span>
+                            </div>
+                            <div class="setting-control">
+                                <input type="email" id="emailInput" placeholder="Tu correo electrónico">
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Cambiar Contraseña</span>
+                                <span class="setting-description">Actualiza tu contraseña</span>
+                            </div>
+                            <div class="setting-control">
+                                <button id="changePasswordBtn" class="action-btn">Cambiar Contraseña</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Data Management -->
+                    <div class="settings-section">
+                        <h2><i class="fas fa-database"></i> Gestión de Datos</h2>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Exportar Datos</span>
+                                <span class="setting-description">Descarga tus playlists y configuraciones</span>
+                            </div>
+                            <div class="setting-control">
+                                <button id="exportDataBtn" class="action-btn">Exportar</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Importar Datos</span>
+                                <span class="setting-description">Carga tus playlists y configuraciones desde un archivo</span>
+                            </div>
+                            <div class="setting-control">
+                                <input type="file" id="importDataInput" accept=".json" class="gif-input">
+                                <button id="importDataBtn" class="action-btn">Importar</button>
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-info">
+                                <span class="setting-title">Restablecer Aplicación</span>
+                                <span class="setting-description">Elimina todas las playlists, canciones recientes, recomendaciones y configuraciones</span>
+                            </div>
+                            <div class="setting-control">
+                                <button id="deleteAllDataBtn" class="delete-btn">
+                                    <i class="fas fa-trash-alt"></i> Borrar todo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
-
 
         <!-- Barra de reproducción -->
         <div class="now-playing-bar">
@@ -109,7 +389,7 @@
                 </div>
                 <button class="like-button" id="likeButton">
                     <i class="far fa-heart"></i>
-                </button>
+                  </button>
             </div>
 
             <div class="player-controls">
@@ -148,6 +428,22 @@
                 </div>
             </div>
         </div>
+        <div class="queue-container">
+            <div class="queue-header">
+                <span class="queue-title">Cola de reproducción</span>
+                <div class="queue-controls">
+                    <button class="queue-control-button" id="queueLoopButton" title="Reproducir en bucle">
+                        <i class="fas fa-repeat"></i>
+                    </button>
+                    <button class="queue-control-button" id="clearQueueButton" title="Limpiar cola">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="queue-items">
+                <!-- Los items de la cola se agregarán dinámicamente aquí -->
+            </div>
+        </div>
 
         <!-- Audio element (oculto) -->
         <audio id="audioPlayer"></audio>
@@ -155,12 +451,6 @@
 
     <script src="background.js"></script>
     <script src="renderer.js"></script>
-    <script>
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.register("sw.js")
-            .then(() => console.log("Service Worker registrado"))
-            .catch((error) => console.log("Error en el registro:", error));
-        }
-      </script>      
-</body>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92e7d1456e4fbff1',t:'MTc0NDM0NjU0OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92f5750498006fb0',t:'MTc0NDQ4OTU3MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'932adba78d727ba0',t:'MTc0NTA0OTUxOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
