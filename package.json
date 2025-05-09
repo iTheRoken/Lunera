@@ -5,20 +5,28 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "build": "electron-builder --win",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@capacitor/android": "^7.0.1",
-    "@capacitor/cli": "^7.0.1",
-    "@capacitor/core": "^7.0.1",
-    "@distube/ytdl-core": "^4.16.4",
+    "@distube/ytdl-core": "^4.16.10",
+    "bcrypt": "^5.1.1",
     "electron-store": "^8.1.0",
+    "fluent-ffmpeg": "^2.1.3",
     "node-fetch": "^2.6.7",
-    "undici": "^7.3.0",
-    "usetube": "^2.2.7"
+    "sqlite3": "^5.1.7",
+    "undici": "^6.21.1",
+    "usetube": "^2.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/android": "^7.1.0",
+    "@capacitor/cli": "^7.0.1",
+    "@capacitor/core": "^7.1.0",
+    "electron": "^34.2.0",
+    "electron-builder": "^25.1.8"
   },
   "build": {
     "appId": "com.RokMusic.electron",
@@ -32,13 +40,13 @@
       "!node_modules/electron",
       "!node_modules/electron-builder"
     ],
+    "extraResources": [
+      "node_modules/@distube/ytdl-core/**/*",
+      "node_modules/usetube/**/*"
+    ],
     "win": {
       "target": "nsis",
       "icon": "assets/icon.ico"
     }
-  },
-  "devDependencies": {
-    "electron": "^34.2.0",
-    "electron-builder": "^25.1.8"
   }
 }
