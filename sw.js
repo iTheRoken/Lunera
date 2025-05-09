@@ -7,7 +7,6 @@ self.addEventListener("install", (event) => {
           "main.js",
           "background.js",
           "renderer.js",
-          "userData.json",
           "icon-192.png",
           "icon-512.png",
           
