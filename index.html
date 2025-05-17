@@ -134,17 +134,87 @@
                         <!-- Canciones recientes se agregarán aquí -->
                     </div>
                 </div>
+                <div class="recommendations">
+                    <h2>Recomendaciones para ti</h2>
+                    <div class="tracks-grid" id="recommendations">
+                        <!-- Recomendaciones se agregarán aquí -->
+                    </div>
+                </div>
             </div>
 
+            <!-- Sección de búsqueda mejorada -->
             <div id="search" class="page">
                 <div class="search-container">
                     <div class="search-input-wrapper">
                         <i class="fas fa-search"></i>
-                        <input type="text" id="searchInput" class="search-input" placeholder="¿Qué quieres escuchar?">
+                        <input type="text" id="searchInput" class="search-input" placeholder="Buscar canciones, artistas o álbumes...">
+                        <button id="clearSearch" class="clear-search-btn" style="display: none;">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    <div class="search-filters">
+                        <button class="filter-btn active" data-filter="all">Todo</button>
+                        <button class="filter-btn" data-filter="songs">Canciones</button>
+                        <button class="filter-btn" data-filter="artists">Artistas</button>
+                        <button class="filter-btn" data-filter="albums">Álbumes</button>
+                        <button class="filter-btn" data-filter="playlists">Playlists</button>
                     </div>
                 </div>
-                <div class="search-results" id="searchResults">
-                    <!-- Resultados de búsqueda se agregarán aquí -->
+                
+                <div class="search-results-container">
+                    <div class="search-sections">
+                        <!-- Resultados principales -->
+                        <div class="search-section" id="topResultsSection">
+                            <h2>Resultados principales</h2>
+                            <div class="top-results-grid" id="topResults"></div>
+                        </div>
+                        
+                        <!-- Resultados por categoría -->
+                        <div class="search-section" id="songsSection">
+                            <div class="section-header">
+                                <h2>Canciones</h2>
+                                <a href="#" class="see-all">Ver todo</a>
+                            </div>
+                            <div class="tracks-grid" id="songsResults"></div>
+                        </div>
+                        
+                        <div class="search-section" id="artistsSection">
+                            <div class="section-header">
+                                <h2>Artistas</h2>
+                                <a href="#" class="see-all">Ver todo</a>
+                            </div>
+                            <div class="artists-grid" id="artistsResults"></div>
+                        </div>
+                        
+                        <div class="search-section" id="albumsSection">
+                            <div class="section-header">
+                                <h2>Álbumes</h2>
+                                <a href="#" class="see-all">Ver todo</a>
+                            </div>
+                            <div class="albums-grid" id="albumsResults"></div>
+                        </div>
+                        
+                        <div class="search-section" id="playlistsSection">
+                            <div class="section-header">
+                                <h2>Playlists</h2>
+                                <a href="#" class="see-all">Ver todo</a>
+                            </div>
+                            <div class="playlists-grid" id="playlistsResults"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Estado de carga -->
+                    <div class="search-loading" id="searchLoading" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <p>Buscando...</p>
+                    </div>
+                    
+                    <!-- Sin resultados -->
+                    <div class="no-results" id="noResults" style="display: none;">
+                        <i class="fas fa-search"></i>
+                        <h3>No se encontraron resultados</h3>
+                        <p>Intenta con términos diferentes</p>
+                    </div>
                 </div>
             </div>
 
@@ -154,25 +224,25 @@
                     <div class="library-filters">
                         <button class="filter-btn active">Playlists</button>
                         <button class="filter-btn">Favoritos</button>
-                      </div>
+                    </div>
                 </div>
                 <div class="library-content" id="libraryContent">
                     <div class="playlist-section" id="playlistsSection">
-                      <h2>Playlists</h2>
-                      <button id="createPlaylistBtn" class="create-playlist-btn">
-                        <i class="fas fa-plus"></i> Crear nueva playlist
-                      </button>
-                      <div id="playlistsContainer">
-                        <p>No hay playlists. Crea una nueva.</p>
-                      </div>
+                        <h2>Playlists</h2>
+                        <button id="createPlaylistBtn" class="create-playlist-btn">
+                            <i class="fas fa-plus"></i> Crear nueva playlist
+                        </button>
+                        <div id="playlistsContainer">
+                            <p>No hay playlists. Crea una nueva.</p>
+                        </div>
                     </div>
                     <div class="favorites-section" id="favoritesSection" style="display: none;">
-                      <h2>Favoritos</h2>
-                      <div id="favoritesContainer">
-                        <p>No hay canciones en tus favoritos.</p>
-                      </div>
+                        <h2>Favoritos</h2>
+                        <div id="favoritesContainer">
+                            <p>No hay canciones en tus favoritos.</p>
+                        </div>
                     </div>
-                  </div>
+                </div>
             </div>
 
             <div id="settings" class="page">
@@ -389,7 +459,7 @@
                 </div>
                 <button class="like-button" id="likeButton">
                     <i class="far fa-heart"></i>
-                  </button>
+                </button>
             </div>
 
             <div class="player-controls">
@@ -451,6 +521,5 @@
 
     <script src="background.js"></script>
     <script src="renderer.js"></script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92e7d1456e4fbff1',t:'MTc0NDM0NjU0OC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'92f5750498006fb0',t:'MTc0NDQ4OTU3MC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
-<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'932adba78d727ba0',t:'MTc0NTA0OTUxOS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</body>
 </html>
