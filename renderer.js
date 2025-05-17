@@ -3,6 +3,8 @@ const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const fs = require('fs');
 
+console.log('Renderer.js cargado - Verificando elementos del DOM');
+
 let audioContext = null;
 let sourceNode = null;
 let gainNode = null;
@@ -21,7 +23,7 @@ const state = {
   currentIndex: -1,
   volume: 1,
   shuffle: false,
-  repeat: 'none', // none, one, all
+  repeat: 'none',
   library: [],
   favorites: [],
   playlists: [],
@@ -35,15 +37,9 @@ const state = {
     theme: 'dark',
     accentColor: '#1db954'
   },
-  currentPlaylist: null, // Añadido para almacenar las canciones de la playlist actual
-  currentPlaylistId: null, // Añadido para almacenar el ID de la playlist actual
-  isNewUser: (() => {
-    const userData = localStorage.getItem('user');
-    if (!userData) return true; // Si no hay datos, es un usuario nuevo
-    const user = JSON.parse(userData);
-    // Solo consideramos que no es un usuario nuevo si tiene username, email y password
-    return !(user.username && user.email && user.password);
-  })(), // Estado para manejar si es un usuario nuevo
+  currentPlaylist: null,
+  currentPlaylistId: null,
+  isNewUser: true, // Valor temporal, se actualizará después
   audioSettings: {
     crossfade: 0,
     normalizeVolume: false,
@@ -62,14 +58,45 @@ const state = {
   account: {
     username: '',
     email: ''
+  },
+  search: {
+    query: '',
+    activeFilter: 'all',
+    isLoading: false,
+    results: {
+      top: [],
+      songs: [],
+      artists: [],
+      albums: [],
+      playlists: []
+    }
   }
 };
+
+state.isNewUser = (() => {
+  const userData = localStorage.getItem('user');
+  if (!userData) return true;
+  const user = JSON.parse(userData);
+  return !(user.username && user.email && user.password);
+})();
+
+console.log('Renderer.js cargado - Verificando elementos del DOM');
+const criticalElements = ['loadingScreen', 'welcomeScreen', 'signupScreen', 'loadingMessage'];
+criticalElements.forEach(id => {
+  if (!document.getElementById(id)) {
+    console.error(`Elemento crítico no encontrado: ${id}`);
+  }
+});
 
 function initializeAudioContext() {
   // Si ya existe un contexto y no está cerrado, devuélvelo
   if (audioContext && audioContext.state !== 'closed') {
     return audioContext;
   }
+
+    audioContext = new (window.AudioContext || window.webkitAudioContext)({
+    latencyHint: 'interactive'
+  });
   
   // Crea un nuevo contexto
   audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -140,6 +167,10 @@ function resetAudioContext() {
 }
 
 async function cleanAudioResources() {
+  // Guardar el estado actual del volumen antes de limpiar
+  const currentVolume = state.volume;
+  const wasMuted = elements.audio.muted;
+
   // 1. Detener y desconectar cualquier fuente existente
   if (sourceNode) {
     try {
@@ -167,13 +198,69 @@ async function cleanAudioResources() {
   oldAudio.parentNode.replaceChild(newAudio, oldAudio);
   elements.audio = newAudio;
 
-  // 4. Resetear todos los filtros
+  // Restaurar el volumen y estado de mute
+  elements.audio.volume = currentVolume;
+  elements.audio.muted = wasMuted;
+
+  // 4. Volver a agregar los event listeners al nuevo elemento audio
+  setupAudioEventListeners();
+  
+  // 5. Resetear todos los filtros
   bassFilter = null;
   midFilter = null;
   trebleFilter = null;
   presenceFilter = null;
   brillianceFilter = null;
   gainNode = null;
+}
+
+// Nueva función para configurar los event listeners del audio
+function setupAudioEventListeners() {
+  if (!elements.audio) return;
+
+  let lastUpdate = 0;
+  elements.audio.addEventListener('timeupdate', () => {
+    const now = Date.now();
+    if (now - lastUpdate < 33) return;
+    lastUpdate = now;
+
+    if (!state.currentTrack || !elements.audio.duration || isNaN(elements.audio.duration)) return;
+    
+    const progress = (elements.audio.currentTime / elements.audio.duration) * 100;
+    elements.progressBar.style.width = `${progress}%`;
+    elements.currentTime.textContent = formatTime(elements.audio.currentTime);
+    applyCrossfade();
+  });
+
+  elements.audio.addEventListener('durationchange', () => {
+    if (!isNaN(elements.audio.duration)) {
+      elements.totalTime.textContent = formatTime(elements.audio.duration);
+    }
+  });
+
+  elements.audio.addEventListener('volumechange', updateVolumeUI);
+
+  elements.audio.addEventListener('play', () => {
+    state.isPlaying = true;
+    updatePlayingUI(true);
+    showPlayingGif();
+  });
+
+  elements.audio.addEventListener('pause', () => {
+    state.isPlaying = false;
+    updatePlayingUI(false);
+    hidePlayingGif();
+  });
+
+  // Cambiar esto:
+  // elements.audio.addEventListener('ended', handleTrackEnded);
+  // Por esto para mayor compatibilidad:
+  elements.audio.addEventListener('ended', () => {
+    handleTrackEnded().catch(error => {
+      console.error('Error en handleTrackEnded:', error);
+      showNotification('Error al manejar el fin de la canción');
+    });
+  });
 }
 
 // Elementos DOM
@@ -431,35 +518,68 @@ if (elements.dedicationLink) {
 
 // Función para mostrar mensajes de carga con retraso
 function showLoadingMessages() {
-  const messages = [
+  try {
+    console.log('Mostrando mensajes de carga...');
+    
+    const messages = [
       "Inicializando...",
       "Cargando lista de reproducción...",
       "Obteniendo recomendaciones...",
       "Preparando tu experiencia musical..."
-  ];
-  let index = 0;
+    ];
+    
+    let index = 0;
+    const maxIndex = messages.length;
+    
+    // Mostrar el primer mensaje inmediatamente
+    if (elements.loadingMessage) {
+      elements.loadingMessage.textContent = messages[index];
+      index++;
+    }
 
-  const interval = setInterval(() => {
-      if (index < messages.length) {
+    const interval = setInterval(() => {
+      if (index < maxIndex) {
+        if (elements.loadingMessage) {
           elements.loadingMessage.textContent = messages[index];
-          index++;
+        }
+        index++;
       } else {
-          clearInterval(interval);
-          // Ocultar pantalla de carga y mostrar pantalla intermedia
+        clearInterval(interval);
+        console.log('Mensajes de carga completados');
+        
+        // Ocultar pantalla de carga y mostrar pantalla intermedia
+        if (elements.loadingScreen) {
           elements.loadingScreen.style.display = 'none';
+        }
+        
+        if (elements.welcomeScreen) {
           elements.welcomeScreen.style.display = 'flex';
+        }
 
-          // Después de 5 segundos, pasar a la siguiente pantalla
-          setTimeout(() => {
-              elements.welcomeScreen.style.display = 'none';
-              if (state.isNewUser) {
-                  elements.signupScreen.classList.add('active');
-              } else {
-                  showPage('home');
-              }
-          }, 5000); // 5 segundos
+        // Después de 5 segundos, pasar a la siguiente pantalla
+        setTimeout(() => {
+          if (elements.welcomeScreen) {
+            elements.welcomeScreen.style.display = 'none';
+          }
+          
+          if (state.isNewUser) {
+            if (elements.signupScreen) {
+              elements.signupScreen.classList.add('active');
+            }
+          } else {
+            showPage('home');
+          }
+        }, 5000);
       }
-  }, 1000); // Cambia el mensaje cada segundo
+    }, 1000);
+  } catch (error) {
+    console.error('Error en showLoadingMessages:', error);
+    // Asegurarse de que la pantalla de carga se oculte incluso si hay un error
+    if (elements.loadingScreen) {
+      elements.loadingScreen.style.display = 'none';
+    }
+    showPage('home');
+  }
 }
 
 // Manejar el formulario de creación de cuenta
@@ -615,13 +735,38 @@ if (elements.audio) {
     }
   });
 
+ if (elements.audio) {
+  let lastUpdate = 0;
   elements.audio.addEventListener('timeupdate', () => {
-    if (!state.currentTrack) return;
+    const now = Date.now();
+    // Limitar actualizaciones a 30 FPS para mejor rendimiento
+    if (now - lastUpdate < 33) return;
+    lastUpdate = now;
+
+    if (!state.currentTrack || !elements.audio.duration || isNaN(elements.audio.duration)) {
+      return;
+    }
+    
     const progress = (elements.audio.currentTime / elements.audio.duration) * 100;
-    elements.progressBar.style.width = `${progress}%`;
-    elements.currentTime.textContent = formatTime(elements.audio.currentTime);
+    if (elements.progressBar) {
+      elements.progressBar.style.width = `${progress}%`;
+    }
+    if (elements.currentTime) {
+      elements.currentTime.textContent = formatTime(elements.audio.currentTime);
+    }
+    if (elements.totalTime) {
+      elements.totalTime.textContent = formatTime(elements.audio.duration);
+    }
     applyCrossfade();
   });
+
+  // Añadir este listener adicional para asegurar que la duración se actualice
+  elements.audio.addEventListener('durationchange', () => {
+    if (elements.totalTime && !isNaN(elements.audio.duration)) {
+      elements.totalTime.textContent = formatTime(elements.audio.duration);
+    }
+  });
+}
 
   elements.audio.addEventListener('loadedmetadata', () => {
     elements.totalTime.textContent = formatTime(elements.audio.duration);
@@ -656,8 +801,13 @@ function togglePlayPause() {
   
   if (state.isPlaying) {
     elements.audio.pause();
+    state.isPlaying = false; // Asegurar que el estado se actualice
+    updatePlayingUI(false); // Forzar actualización de UI
   } else {
-    elements.audio.play().catch(error => {
+    elements.audio.play().then(() => {
+      state.isPlaying = true; // Asegurar que el estado se actualice
+      updatePlayingUI(true); // Forzar actualización de UI
+    }).catch(error => {
       console.error('Error al reproducir:', error);
       state.isPlaying = false;
       updatePlayingUI(false);
@@ -683,11 +833,21 @@ async function playSong(track) {
       throw new Error('Track inválido o sin URL');
     }
 
-    // Limpiar recursos existentes (incluyendo crear nuevo elemento audio)
+    // Actualizar el estado de la canción actual
+    state.currentTrack = track;
+    updateTrackInfo();
+
+    // Guardar el volumen actual antes de limpiar
+    const currentVolume = state.volume;
+    const wasMuted = elements.audio.muted;
+
+    // Limpiar recursos existentes
     await cleanAudioResources();
     
     // Configurar nueva canción
     elements.currentTrackTitle.textContent = 'Cargando...';
+    elements.currentTrackArtist.textContent = '';
+    
     const streamData = await ipcRenderer.invoke('stream-song', track.url);
     
     state.currentTrack = {
@@ -699,11 +859,32 @@ async function playSong(track) {
     // Configurar nueva fuente de audio
     elements.audio.src = streamData.path;
     
+    // Restaurar el volumen y mute
+    elements.audio.volume = currentVolume;
+    elements.audio.muted = wasMuted;
+    
     // Esperar a que el audio esté listo
     await new Promise((resolve, reject) => {
-      elements.audio.oncanplay = resolve;
-      elements.audio.onerror = reject;
-      setTimeout(() => reject(new Error('Timeout al cargar audio')), 10000);
+      const onCanPlay = () => {
+        elements.audio.removeEventListener('canplay', onCanPlay);
+        elements.audio.removeEventListener('error', onError);
+        resolve();
+      };
+      
+      const onError = (error) => {
+        elements.audio.removeEventListener('canplay', onCanPlay);
+        elements.audio.removeEventListener('error', onError);
+        reject(error);
+      };
+      
+      elements.audio.addEventListener('canplay', onCanPlay);
+      elements.audio.addEventListener('error', onError);
+      
+      setTimeout(() => {
+        elements.audio.removeEventListener('canplay', onCanPlay);
+        elements.audio.removeEventListener('error', onError);
+        reject(new Error('Timeout al cargar audio'));
+      }, 30000);
     });
 
     // Crear nuevo contexto de audio
@@ -722,15 +903,10 @@ async function playSong(track) {
     updatePlayingUI(true);
     updateTrackInfo();
     showPlayingGif();
+    updateVolumeUI(); // Asegurar que la UI de volumen se actualice
   } catch (error) {
     console.error('Error al reproducir canción:', error);
-    let errorMessage = 'Error al reproducir la canción';
-    if (error.message.includes('Status code: 403')) {
-      errorMessage += ': No se puede reproducir este video (bloqueado por YouTube). Prueba con otra canción.';
-    } else {
-      errorMessage += ': ' + error.message;
-    }
-    showNotification(errorMessage);
+    showNotification('Error al reproducir la canción: ' + error.message);
     state.isPlaying = false;
     state.currentTrack = null;
     updatePlayingUI(false);
@@ -869,12 +1045,28 @@ function handleVolumeChange(e) {
 }
 
 function updateVolumeUI() {
-  const volumeProgress = elements.volumeProgress;
-  volumeProgress.style.width = `${elements.audio.muted ? 0 : elements.audio.volume * 100}%`;
+  if (!elements.volumeProgress || !elements.volumeButton) return;
   
-  const icon = elements.audio.muted || elements.audio.volume === 0 ? 'mute' :
-              elements.audio.volume < 0.5 ? 'down' : 'up';
-  elements.volumeButton.innerHTML = `<i class="fas fa-volume-${icon}"></i>`;
+  // Actualizar la barra de volumen
+  const volumePercentage = elements.audio.muted ? 0 : elements.audio.volume * 100;
+  elements.volumeProgress.style.width = `${volumePercentage}%`;
+  
+  // Actualizar el icono del botón de volumen
+  let volumeIcon;
+  if (elements.audio.muted || elements.audio.volume === 0) {
+    volumeIcon = 'volume-mute';
+  } else if (elements.audio.volume < 0.33) {
+    volumeIcon = 'volume-down';
+  } else if (elements.audio.volume < 0.66) {
+    volumeIcon = 'volume';
+  } else {
+    volumeIcon = 'volume-up';
+  }
+  
+  elements.volumeButton.innerHTML = `<i class="fas fa-${volumeIcon}"></i>`;
+  
+  // Asegurarse de que el estado global esté actualizado
+  state.volume = elements.audio.volume;
 }
 
 function handleProgressBarClick(e) {
@@ -919,29 +1111,51 @@ document.querySelectorAll('.nav-link').forEach(link => {
 });
 
 function showPage(pageId) {
-  document.querySelectorAll('.page').forEach(page => {
-    page.classList.remove('active');
-  });
-  document.getElementById(pageId).classList.add('active');
+  console.log(`Intentando mostrar página: ${pageId}`);
   
-  document.querySelectorAll('.nav-link').forEach(link => {
-    link.classList.remove('active');
-  });
-  document.querySelector(`[data-page="${pageId}"]`).classList.add('active');
-
-  // Limpiar currentPlaylist si no estamos en la página de biblioteca
-  if (pageId !== 'library') {
-    state.currentPlaylist = null;
-    state.currentPlaylistId = null;
-    state.currentIndex = -1;
+  try {
+    // Ocultar todas las páginas
+    document.querySelectorAll('.page').forEach(page => {
+      page.classList.remove('active');
+    });
+    
+    // Mostrar la página solicitada
+    const pageToShow = document.getElementById(pageId);
+    if (pageToShow) {
+      pageToShow.classList.add('active');
+      console.log(`Página ${pageId} mostrada correctamente`);
+      
+      // Actualizar navegación
+      document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+      });
+      
+      const activeLink = document.querySelector(`[data-page="${pageId}"]`);
+      if (activeLink) {
+        activeLink.classList.add('active');
+      }
+      
+      // Actualizar contenido específico de la página
+      if (pageId === 'home') {
+        loadHomeContent();
+      } else if (pageId === 'library') {
+        loadLibrary();
+      } else if (pageId === 'search') {
+        updateSearchUI(); // Asegurar que la UI de búsqueda esté actualizada
+      }
+    } else {
+      console.error(`Página con ID ${pageId} no encontrada`);
+    }
+    
+    // Limpiar currentPlaylist si no estamos en la biblioteca
+    if (pageId !== 'library') {
+      state.currentPlaylist = null;
+      state.currentPlaylistId = null;
+      state.currentIndex = -1;
+    }
+  } catch (error) {
+    console.error(`Error al mostrar página ${pageId}:`, error);
   }
-
-  if (pageId === 'home') {
-    loadHomeContent();
-  } else if (pageId === 'library') {
-    loadLibrary();
-  }
-  console.log(`Página activa: ${pageId}`);
 }
 
 // Cargar contenido de inicio
@@ -1050,16 +1264,728 @@ if (elements.searchInput) {
 
 async function performSearch(query) {
   try {
-    console.log(`Realizando búsqueda con: ${query}`);
-    elements.searchResults.innerHTML = '<div class="loading">Buscando...</div>';
-    const results = await ipcRenderer.invoke('search-songs', query);
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+      console.log('Búsqueda vacía - limpiando resultados');
+      clearSearchResults();
+      return;
+    }
+
+    console.log(`Realizando búsqueda: "${query}"`);
     
-    state.searchResults = results;
-    displaySearchResults(results);
+    // Verificar que los elementos del DOM existan
+    const searchLoading = document.getElementById('searchLoading');
+    const noResults = document.getElementById('noResults');
+    const searchSections = document.querySelector('.search-sections');
+    
+    if (!searchLoading || !noResults || !searchSections) {
+      throw new Error('Elementos del DOM para búsqueda no encontrados');
+    }
+
+    state.search.query = query.trim();
+    state.search.isLoading = true;
+    
+    // Actualizar UI de forma segura
+    if (searchLoading) searchLoading.style.display = 'flex';
+    if (noResults) noResults.style.display = 'none';
+    if (searchSections) searchSections.style.display = 'none';
+    
+    // Mostrar skeleton loading
+    showSkeletonLoading();
+
+    // Realizar búsqueda
+    const searchResults = await ipcRenderer.invoke('search-songs', query);
+    
+    // Procesar resultados
+    processSearchResults(searchResults);
+    
+    state.search.isLoading = false;
+    
+    // Actualizar UI solo si todavía estamos en la página de búsqueda
+    if (document.getElementById('search').classList.contains('active')) {
+      updateSearchUI();
+    }
+    
   } catch (error) {
-    console.error('Error en la búsqueda:', error);
-    elements.searchResults.innerHTML = '<div class="error">Error al buscar canciones</div>';
-    state.searchResults = [];
+    console.error('Error en performSearch:', error);
+    state.search.isLoading = false;
+    
+    // Mostrar estado de error solo si estamos en la página de búsqueda
+    if (document.getElementById('search').classList.contains('active')) {
+      showNoResults();
+    }
+    
+    // Mostrar notificación al usuario
+    showNotification('Error al realizar la búsqueda');
+  }
+}
+
+function processSearchResults(results) {
+  // Limpiar resultados anteriores
+  state.search.results = {
+    top: [],
+    songs: [],
+    artists: [],
+    albums: [],
+    playlists: []
+  };
+
+  if (!results || results.length === 0) {
+    showNoResults();
+    return;
+  }
+
+  // Simular diferentes tipos de resultados (en una app real esto vendría de la API)
+  state.search.results.top = results.slice(0, 3).map(item => ({
+    ...item,
+    type: ['song', 'artist', 'album'][Math.floor(Math.random() * 3)],
+    description: item.artist || 'Artista desconocido'
+  }));
+
+  state.search.results.songs = results.slice(0, 10);
+  
+  // Simular artistas (agrupando por nombre de artista)
+  const artistMap = new Map();
+  results.forEach(track => {
+    if (!artistMap.has(track.artist)) {
+      artistMap.set(track.artist, {
+        id: `artist_${track.artist.replace(/\s+/g, '_')}`,
+        name: track.artist,
+        image: track.thumbnail || 'assets/default-artist.png',
+        type: 'artist'
+      });
+    }
+  });
+  state.search.results.artists = Array.from(artistMap.values()).slice(0, 6);
+  
+  // Simular álbumes (agrupando por título similar)
+  const albumMap = new Map();
+  results.forEach((track, index) => {
+    const albumName = track.title.split(' ')[0] + ' Album';
+    if (!albumMap.has(albumName)) {
+      albumMap.set(albumName, {
+        id: `album_${index}`,
+        name: albumName,
+        artist: track.artist,
+        image: track.thumbnail || 'assets/default-album.png',
+        type: 'album'
+      });
+    }
+  });
+  state.search.results.albums = Array.from(albumMap.values()).slice(0, 6);
+  
+  // Simular playlists (basadas en búsquedas populares)
+  state.search.results.playlists = [
+    {
+      id: 'playlist_1',
+      name: `Playlist: ${state.search.query}`,
+      owner: 'RokMusic',
+      image: 'assets/default-playlist.png',
+      type: 'playlist'
+    },
+    {
+      id: 'playlist_2',
+      name: `${state.search.query} Mix`,
+      owner: 'RokMusic',
+      image: 'assets/default-playlist.png',
+      type: 'playlist'
+    }
+  ];
+}
+
+function updateSearchUI() {
+  const searchInput = document.getElementById('searchInput');
+  const clearSearchBtn = document.getElementById('clearSearch');
+  const searchLoading = document.getElementById('searchLoading');
+  const noResults = document.getElementById('noResults');
+  const searchSections = document.querySelector('.search-sections');
+  
+  // Actualizar campo de búsqueda
+  if (searchInput) {
+    searchInput.value = state.search.query;
+    clearSearchBtn.style.display = state.search.query ? 'block' : 'none';
+  }
+  
+  // Mostrar/ocultar estados
+  if (state.search.isLoading) {
+    searchLoading.style.display = 'flex';
+    noResults.style.display = 'none';
+    searchSections.style.display = 'none';
+  } else if (state.search.results.top.length === 0 && state.search.query) {
+    searchLoading.style.display = 'none';
+    noResults.style.display = 'flex';
+    searchSections.style.display = 'none';
+  } else {
+    searchLoading.style.display = 'none';
+    noResults.style.display = 'none';
+    searchSections.style.display = 'flex';
+    
+    // Renderizar resultados
+    renderSearchResults();
+  }
+}
+
+function renderSearchResults() {
+    // Resultados principales (Top Results)
+    const topResultsContainer = document.getElementById('topResults');
+    if (topResultsContainer) {
+        topResultsContainer.innerHTML = state.search.results.top.map(result => {
+            const isFavorite = state.favorites.some(fav => fav.id === result.id);
+            const isInLibrary = state.library.some(item => item.id === result.id);
+            
+            return `
+                <div class="top-result-card" data-id="${result.id}" data-type="${result.type}">
+                    ${result.type === 'artist' ? `
+                        <div class="artist-image-container">
+                            <img src="${result.image || 'assets/default-artist.png'}" alt="${result.name}" class="top-result-image">
+                        </div>
+                    ` : `
+                        <img src="${result.thumbnail || (result.type === 'album' ? 'assets/default-album.png' : 'assets/default-track.png')}" 
+                             alt="${result.title || result.name}" 
+                             class="top-result-image">
+                    `}
+                    <div class="top-result-info">
+                        <div class="top-result-type">${getTypeName(result.type)}</div>
+                        <h3 class="top-result-title">${result.title || result.name}</h3>
+                        <p class="top-result-subtitle">${result.artist || result.description || ''}</p>
+                    </div>
+                    <div class="card-controls-overlay">
+                        ${result.type === 'song' ? `
+                            <button class="card-control-btn play-btn" title="Reproducir">
+                                <i class="fas fa-play"></i>
+                            </button>
+                            <button class="card-control-btn like-btn ${isFavorite ? 'active' : ''}" 
+                                    title="${isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}">
+                                <i class="fas fa-heart"></i>
+                            </button>
+                            <button class="card-control-btn queue-btn" title="Añadir a la cola">
+                                <i class="fas fa-list"></i>
+                            </button>
+                            <button class="card-control-btn playlist-btn" title="Añadir a playlist">
+                                <i class="fas fa-folder-plus"></i>
+                            </button>
+                        ` : `
+                            <button class="card-control-btn view-btn" title="Ver ${getTypeName(result.type)}">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${(result.type === 'playlist' || result.type === 'album') ? `
+                                <button class="card-control-btn add-btn ${isInLibrary ? 'active' : ''}" 
+                                        title="${isInLibrary ? 'En tu biblioteca' : 'Añadir a biblioteca'}">
+                                    <i class="fas fa-${isInLibrary ? 'check' : 'plus'}"></i>
+                                </button>
+                            ` : ''}
+                        `}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Event listeners para los resultados principales
+        topResultsContainer.querySelectorAll('.play-btn').forEach((btn, index) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                playSong(state.search.results.top[index]);
+            });
+        });
+
+        topResultsContainer.querySelectorAll('.like-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const track = state.search.results.top[index];
+                if (btn.classList.contains('active')) {
+                    await removeFromFavorites(track.id);
+                    btn.classList.remove('active');
+                    btn.title = 'Añadir a favoritos';
+                    btn.innerHTML = '<i class="fas fa-heart"></i>';
+                } else {
+                    await addToFavorites(track);
+                    btn.classList.add('active');
+                    btn.title = 'Quitar de favoritos';
+                    btn.innerHTML = '<i class="fas fa-heart"></i>';
+                }
+            });
+        });
+
+        topResultsContainer.querySelectorAll('.queue-btn').forEach((btn, index) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                addToQueue(state.search.results.top[index]);
+                showNotification(`${state.search.results.top[index].title} añadido a la cola`);
+            });
+        });
+
+        topResultsContainer.querySelectorAll('.playlist-btn').forEach((btn, index) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showPlaylistSelector(state.search.results.top[index]);
+            });
+        });
+
+        topResultsContainer.querySelectorAll('.add-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const item = state.search.results.top[index];
+                if (btn.classList.contains('active')) return;
+                
+                try {
+                    if (item.type === 'playlist') {
+                        const newPlaylist = await ipcRenderer.invoke('create-playlist', item.name);
+                        // Aquí podrías añadir canciones a la playlist si las tienes disponibles
+                        btn.classList.add('active');
+                        btn.title = 'En tu biblioteca';
+                        btn.innerHTML = '<i class="fas fa-check"></i>';
+                        showNotification(`Playlist "${item.name}" añadida a tu biblioteca`);
+                    } else if (item.type === 'album') {
+                        // Implementar lógica para añadir álbumes completos
+                        await ipcRenderer.invoke('add-album-to-library', item);
+                        btn.classList.add('active');
+                        btn.title = 'En tu biblioteca';
+                        btn.innerHTML = '<i class="fas fa-check"></i>';
+                        showNotification(`Álbum "${item.name}" añadido a tu biblioteca`);
+                    }
+                    await loadLibrary();
+                } catch (error) {
+                    console.error('Error al añadir a biblioteca:', error);
+                    showNotification('Error al añadir a la biblioteca');
+                }
+            });
+        });
+
+        topResultsContainer.querySelectorAll('.view-btn').forEach((btn, index) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const item = state.search.results.top[index];
+                if (item.type === 'artist') {
+                    // Implementar vista de artista
+                    showNotification(`Mostrando artista: ${item.name}`);
+                } else if (item.type === 'playlist') {
+                    // Implementar vista de playlist
+                    showNotification(`Mostrando playlist: ${item.name}`);
+                } else if (item.type === 'album') {
+                    // Implementar vista de álbum
+                    showNotification(`Mostrando álbum: ${item.name}`);
+                }
+            });
+        });
+    }
+
+    // Resultados de canciones
+    const songsContainer = document.getElementById('songsResults');
+    if (songsContainer) {
+        songsContainer.innerHTML = state.search.results.songs.map(song => {
+            const isFavorite = state.favorites.some(fav => fav.id === song.id);
+            
+            return `
+                <div class="track-card">
+                    <img src="${song.thumbnail || 'assets/default-track.png'}" alt="${song.title}">
+                    <div class="track-info">
+                        <h3>${song.title}</h3>
+                        <p>${song.artist}</p>
+                    </div>
+                    <div class="card-controls">
+                        <button class="play-button" title="Reproducir">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button class="like-button ${isFavorite ? 'active' : ''}" 
+                                title="${isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos'}">
+                            <i class="fas fa-heart"></i>
+                        </button>
+                        <button class="queue-button" title="Añadir a la cola">
+                            <i class="fas fa-list"></i>
+                        </button>
+                        <button class="add-to-playlist" title="Añadir a playlist">
+                            <i class="fas fa-folder-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Event listeners para las canciones
+        songsContainer.querySelectorAll('.play-button').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                playSong(state.search.results.songs[index]);
+            });
+        });
+
+        songsContainer.querySelectorAll('.like-button').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                const song = state.search.results.songs[index];
+                if (btn.classList.contains('active')) {
+                    await removeFromFavorites(song.id);
+                    btn.classList.remove('active');
+                    btn.title = 'Añadir a favoritos';
+                } else {
+                    await addToFavorites(song);
+                    btn.classList.add('active');
+                    btn.title = 'Quitar de favoritos';
+                }
+            });
+        });
+
+        songsContainer.querySelectorAll('.queue-button').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                addToQueue(state.search.results.songs[index]);
+                showNotification(`${state.search.results.songs[index].title} añadido a la cola`);
+            });
+        });
+
+        songsContainer.querySelectorAll('.add-to-playlist').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                showPlaylistSelector(state.search.results.songs[index]);
+            });
+        });
+    }
+
+    // Resultados de artistas
+    const artistsContainer = document.getElementById('artistsResults');
+    if (artistsContainer) {
+        artistsContainer.innerHTML = state.search.results.artists.map(artist => {
+            return `
+                <div class="artist-card" data-id="${artist.id}">
+                    <div class="artist-image-container">
+                        <img src="${artist.image || 'assets/default-artist.png'}" alt="${artist.name}" class="artist-image">
+                    </div>
+                    <h3 class="artist-name">${artist.name}</h3>
+                    <p class="artist-type">Artista</p>
+                    <div class="card-controls-overlay">
+                        <button class="card-control-btn view-btn" title="Ver artista">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="card-control-btn follow-btn" title="Seguir artista">
+                            <i class="fas fa-user-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Event listeners para artistas
+        artistsContainer.querySelectorAll('.view-btn').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                // Implementar vista de artista
+                showNotification(`Mostrando artista: ${state.search.results.artists[index].name}`);
+            });
+        });
+
+        artistsContainer.querySelectorAll('.follow-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                // Implementar lógica para seguir artistas
+                showNotification(`Ahora sigues a ${state.search.results.artists[index].name}`);
+            });
+        });
+    }
+
+    // Resultados de álbumes
+    const albumsContainer = document.getElementById('albumsResults');
+    if (albumsContainer) {
+        albumsContainer.innerHTML = state.search.results.albums.map(album => {
+            const isInLibrary = state.library.some(item => item.id === album.id);
+            
+            return `
+                <div class="album-card" data-id="${album.id}">
+                    <img src="${album.image || 'assets/default-album.png'}" alt="${album.name}" class="album-image">
+                    <h3 class="album-name">${album.name}</h3>
+                    <p class="album-artist">${album.artist}</p>
+                    <div class="card-controls-overlay">
+                        <button class="card-control-btn view-btn" title="Ver álbum">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="card-control-btn play-btn" title="Reproducir álbum">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button class="card-control-btn add-btn ${isInLibrary ? 'active' : ''}" 
+                                title="${isInLibrary ? 'En tu biblioteca' : 'Añadir a biblioteca'}">
+                            <i class="fas fa-${isInLibrary ? 'check' : 'plus'}"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Event listeners para álbumes
+        albumsContainer.querySelectorAll('.view-btn').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                // Implementar vista de álbum
+                showNotification(`Mostrando álbum: ${state.search.results.albums[index].name}`);
+            });
+        });
+
+        albumsContainer.querySelectorAll('.play-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                // Implementar reproducción de álbum completo
+                const album = state.search.results.albums[index];
+                const albumTracks = await ipcRenderer.invoke('get-album-tracks', album.id);
+                if (albumTracks && albumTracks.length > 0) {
+                    state.currentPlaylist = albumTracks;
+                    state.currentIndex = 0;
+                    playSong(albumTracks[0]);
+                    showNotification(`Reproduciendo álbum: ${album.name}`);
+                } else {
+                    showNotification('No se encontraron canciones para este álbum');
+                }
+            });
+        });
+
+        albumsContainer.querySelectorAll('.add-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                if (btn.classList.contains('active')) return;
+                
+                const album = state.search.results.albums[index];
+                try {
+                    await ipcRenderer.invoke('add-album-to-library', album);
+                    btn.classList.add('active');
+                    btn.title = 'En tu biblioteca';
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    showNotification(`Álbum "${album.name}" añadido a tu biblioteca`);
+                    await loadLibrary();
+                } catch (error) {
+                    console.error('Error al añadir álbum:', error);
+                    showNotification('Error al añadir el álbum');
+                }
+            });
+        });
+    }
+
+    // Resultados de playlists
+    const playlistsContainer = document.getElementById('playlistsResults');
+    if (playlistsContainer) {
+        playlistsContainer.innerHTML = state.search.results.playlists.map(playlist => {
+            const isInLibrary = state.playlists.some(item => item.name === playlist.name);
+            
+            return `
+                <div class="playlist-card" data-id="${playlist.id}">
+                    <img src="${playlist.image || 'assets/default-playlist.png'}" alt="${playlist.name}" class="playlist-image">
+                    <h3 class="playlist-name">${playlist.name}</h3>
+                    <p class="playlist-owner">Por ${playlist.owner}</p>
+                    <div class="card-controls-overlay">
+                        <button class="card-control-btn view-btn" title="Ver playlist">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="card-control-btn play-btn" title="Reproducir playlist">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button class="card-control-btn add-btn ${isInLibrary ? 'active' : ''}" 
+                                title="${isInLibrary ? 'En tu biblioteca' : 'Añadir a biblioteca'}">
+                            <i class="fas fa-${isInLibrary ? 'check' : 'plus'}"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Event listeners para playlists
+        playlistsContainer.querySelectorAll('.view-btn').forEach((btn, index) => {
+            btn.addEventListener('click', () => {
+                // Implementar vista de playlist
+                showNotification(`Mostrando playlist: ${state.search.results.playlists[index].name}`);
+            });
+        });
+
+        playlistsContainer.querySelectorAll('.play-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                // Implementar reproducción de playlist completa
+                const playlist = state.search.results.playlists[index];
+                const playlistTracks = await ipcRenderer.invoke('get-playlist-tracks', playlist.id);
+                if (playlistTracks && playlistTracks.length > 0) {
+                    state.currentPlaylist = playlistTracks;
+                    state.currentIndex = 0;
+                    playSong(playlistTracks[0]);
+                    showNotification(`Reproduciendo playlist: ${playlist.name}`);
+                } else {
+                    showNotification('No se encontraron canciones para esta playlist');
+                }
+            });
+        });
+
+        playlistsContainer.querySelectorAll('.add-btn').forEach((btn, index) => {
+            btn.addEventListener('click', async () => {
+                if (btn.classList.contains('active')) return;
+                
+                const playlist = state.search.results.playlists[index];
+                try {
+                    const newPlaylist = await ipcRenderer.invoke('create-playlist', playlist.name);
+                    // Aquí podrías añadir canciones a la playlist si las tienes disponibles
+                    btn.classList.add('active');
+                    btn.title = 'En tu biblioteca';
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    showNotification(`Playlist "${playlist.name}" añadida a tu biblioteca`);
+                    await loadLibrary();
+                } catch (error) {
+                    console.error('Error al añadir playlist:', error);
+                    showNotification('Error al añadir la playlist');
+                }
+            });
+        });
+    }
+}
+
+function getTypeName(type) {
+  const types = {
+    song: 'Canción',
+    artist: 'Artista',
+    album: 'Álbum',
+    playlist: 'Playlist'
+  };
+  return types[type] || type;
+}
+
+function applyActiveFilter() {
+  // Ocultar todas las secciones si el filtro no es "all"
+  const showAll = state.search.activeFilter === 'all';
+  
+  document.getElementById('topResultsSection').style.display = 
+    showAll ? 'block' : 'none';
+  
+  document.getElementById('songsSection').style.display = 
+    (showAll || state.search.activeFilter === 'songs') ? 'block' : 'none';
+  
+  document.getElementById('artistsSection').style.display = 
+    (showAll || state.search.activeFilter === 'artists') ? 'block' : 'none';
+  
+  document.getElementById('albumsSection').style.display = 
+    (showAll || state.search.activeFilter === 'albums') ? 'block' : 'none';
+  
+  document.getElementById('playlistsSection').style.display = 
+    (showAll || state.search.activeFilter === 'playlists') ? 'block' : 'none';
+}
+
+function clearSearchResults() {
+  state.search = {
+    query: '',
+    activeFilter: 'all',
+    isLoading: false,
+    results: {
+      top: [],
+      songs: [],
+      artists: [],
+      albums: [],
+      playlists: []
+    }
+  };
+  updateSearchUI();
+}
+
+function showNoResults() {
+  const searchLoading = document.getElementById('searchLoading');
+  const noResults = document.getElementById('noResults');
+  const searchSections = document.querySelector('.search-sections');
+  
+  searchLoading.style.display = 'none';
+  noResults.style.display = 'flex';
+  searchSections.style.display = 'none';
+}
+
+function showSkeletonLoading() {
+  const searchLoading = document.getElementById('searchLoading');
+  const noResults = document.getElementById('noResults');
+  const searchSections = document.querySelector('.search-sections');
+  
+  searchLoading.style.display = 'flex';
+  noResults.style.display = 'none';
+  searchSections.style.display = 'none';
+  
+  // Rellenar con skeleton loading
+  const topResultsContainer = document.getElementById('topResults');
+  if (topResultsContainer) {
+    topResultsContainer.innerHTML = `
+      <div class="top-result-card skeleton">
+        <div class="skeleton-image"></div>
+        <div class="top-result-info">
+          <div class="skeleton-text very-short"></div>
+          <div class="skeleton-text"></div>
+          <div class="skeleton-text short"></div>
+        </div>
+      </div>
+      <div class="top-result-card skeleton">
+        <div class="skeleton-image"></div>
+        <div class="top-result-info">
+          <div class="skeleton-text very-short"></div>
+          <div class="skeleton-text"></div>
+          <div class="skeleton-text short"></div>
+        </div>
+      </div>
+    `;
+  }
+  
+  const songsContainer = document.getElementById('songsResults');
+  if (songsContainer) {
+    songsContainer.innerHTML = Array(6).fill(`
+      <div class="track-card skeleton">
+        <div class="skeleton-image"></div>
+        <div class="skeleton-text"></div>
+        <div class="skeleton-text short"></div>
+      </div>
+    `).join('');
+  }
+  
+  // ... similar para otras secciones
+}
+
+// Inicializar eventos de búsqueda
+function initializeSearch() {
+  try {
+    console.log('Inicializando sistema de búsqueda...');
+    
+    const searchInput = document.getElementById('searchInput');
+    const clearSearchBtn = document.getElementById('clearSearch');
+    const filterButtons = document.querySelectorAll('.search-filters .filter-btn');
+    
+    if (!searchInput) {
+      console.error('Elemento searchInput no encontrado');
+      return;
+    }
+
+    // Evento de búsqueda con debounce
+    let searchTimeout;
+    searchInput.addEventListener('input', (e) => {
+      clearTimeout(searchTimeout);
+      const query = e.target.value.trim();
+      
+      if (query) {
+        searchTimeout = setTimeout(() => {
+          performSearch(query);
+        }, 500);
+      } else {
+        clearSearchResults();
+      }
+    });
+    
+    // Permitir búsqueda al presionar Enter
+    searchInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(searchTimeout);
+        performSearch(e.target.value.trim());
+      }
+    });
+    
+    // Botón para limpiar búsqueda
+    if (clearSearchBtn) {
+      clearSearchBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        searchInput.focus();
+        clearSearchResults();
+      });
+    } else {
+      console.warn('Botón clearSearch no encontrado');
+    }
+    
+    // Filtros de búsqueda
+    if (filterButtons.length > 0) {
+      filterButtons.forEach(button => {
+        button.addEventListener('click', () => {
+          filterButtons.forEach(btn => btn.classList.remove('active'));
+          button.classList.add('active');
+          state.search.activeFilter = button.dataset.filter;
+          applyActiveFilter();
+        });
+      });
+    } else {
+      console.warn('Botones de filtro no encontrados');
+    }
+    
+    console.log('Sistema de búsqueda inicializado correctamente');
+  } catch (error) {
+    console.error('Error al inicializar el sistema de búsqueda:', error);
   }
 }
 
@@ -1191,16 +2117,23 @@ function updateQueueUI() {
   
   if (state.queue.length > 0) {
     queueContainer.classList.add('active');
-    queueItems.innerHTML = state.queue.map((track, index) => `
+    queueItems.innerHTML = state.queue.map((track, index) => {
+      // Truncar título y artista si son muy largos
+      const truncatedTitle = track.title.length > 25 ? 
+        track.title.substring(0, 22) + '...' : track.title;
+      const truncatedArtist = track.artist.length > 25 ? 
+        track.artist.substring(0, 22) + '...' : track.artist;
+      
+      return `
       <div class="queue-item">
         <img src="${track.thumbnail}" alt="${track.title}">
         <div class="queue-item-info">
-          <div class="queue-item-title">${track.title}</div>
-          <div class="queue-item-artist">${track.artist}</div>
+          <div class="queue-item-title" title="${track.title}">${truncatedTitle}</div>
+          <div class="queue-item-artist" title="${track.artist}">${truncatedArtist}</div>
         </div>
         <button class="queue-item-remove" data-index="${index}"><i class="fas fa-times"></i></button>
       </div>
-    `).join('');
+    `}).join('');
 
     queueItems.querySelectorAll('.queue-item-remove').forEach(button => {
       button.addEventListener('click', (e) => {
@@ -1212,6 +2145,70 @@ function updateQueueUI() {
   } else {
     queueContainer.classList.remove('active');
     console.log('Cola vacía, interfaz oculta');
+  }
+}
+
+async function handleTrackEnded() {
+  console.log('Audio terminado');
+  state.isPlaying = false;
+  updatePlayingUI(false);
+  hidePlayingGif();
+
+  // Eliminar archivo temporal
+  if (state.currentTrack && state.currentTrack.path) {
+    try {
+      fs.unlinkSync(state.currentTrack.path);
+      console.log('Archivo temporal eliminado:', state.currentTrack.path);
+    } catch (error) {
+      console.error('Error al eliminar archivo temporal:', error);
+    }
+  }
+
+  // Limpiar el contexto de audio
+  if (audioContext) {
+    await audioContext.close();
+    audioContext = null;
+  }
+  sourceNode = null;
+
+  // Manejar reproducción de playlist
+  if (state.currentPlaylist && state.currentPlaylist.length > 0) {
+    let nextIndex = state.currentIndex;
+    
+    if (state.shuffle) {
+      // Modo aleatorio
+      nextIndex = Math.floor(Math.random() * state.currentPlaylist.length);
+    } else {
+      // Modo normal
+      nextIndex = (state.currentIndex + 1) % state.currentPlaylist.length;
+    }
+
+    // Verificar si debemos continuar reproduciendo
+    if (nextIndex === 0 && state.repeat !== 'all' && !state.shuffle) {
+      console.log('Fin de la playlist, deteniendo reproducción');
+      state.currentTrack = null;
+      updateTrackInfo();
+      return;
+    }
+
+    const nextTrack = state.currentPlaylist[nextIndex];
+    console.log(`Reproduciendo siguiente canción de la playlist (índice ${nextIndex}): ${nextTrack.title}`);
+    state.currentIndex = nextIndex;
+    playSong(nextTrack);
+    return;
+  }
+
+  // Manejar cola de reproducción normal
+  if (state.queue.length > 0) {
+    playNext();
+  } else if (state.repeat === 'one' && state.currentTrack) {
+    // Repetir la misma canción
+    elements.audio.currentTime = 0;
+    elements.audio.play();
+  } else if (state.repeat === 'all' && state.currentPlaylist?.length > 0) {
+    // Repetir toda la playlist desde el inicio
+    state.currentIndex = 0;
+    playSong(state.currentPlaylist[0]);
   }
 }
 
@@ -1232,13 +2229,23 @@ document.getElementById('closeBtn').addEventListener('click', () => {
 });
 
 // Biblioteca
-async function addToLibrary(track) {
+async function addToLibrary(item) {
   try {
-    console.log(`Añadiendo a biblioteca: ${track.title}`);
-    const updatedLibrary = await ipcRenderer.invoke('add-to-library', track);
-    state.library = updatedLibrary;
-    updateLibraryUI();
-    showNotification(`${track.title} añadida a la biblioteca`);
+    if (item.type === 'song') {
+      await ipcRenderer.invoke('add-to-library', item);
+      showNotification(`${item.title} añadida a la biblioteca`);
+    } 
+    else if (item.type === 'playlist') {
+      const newPlaylist = await ipcRenderer.invoke('create-playlist', item.name);
+      // Aquí podrías añadir todas las canciones de la playlist si las tienes
+      showNotification(`Playlist "${item.name}" creada`);
+    }
+    else if (item.type === 'album') {
+      // Implementar lógica para álbumes
+      showNotification(`Álbum "${item.name}" añadido`);
+    }
+    
+    await loadLibrary();
   } catch (error) {
     console.error('Error al agregar a biblioteca:', error);
     showNotification('Error al agregar a la biblioteca');
@@ -1413,9 +2420,10 @@ async function viewPlaylist(playlistId) {
     const songs = await ipcRenderer.invoke('get-playlist-songs', playlistId);
     const playlist = state.playlists.find(p => p.id === parseInt(playlistId));
     
-    // Guardamos las canciones de la playlist en el estado para usarlas en la reproducción
+    // Guardar las canciones de la playlist en el estado
     state.currentPlaylist = songs;
     state.currentPlaylistId = playlistId;
+    state.currentIndex = -1; // Resetear el índice
 
     elements.libraryContent.innerHTML = `
       <h2>Playlist: ${playlist ? playlist.name : 'Desconocida'}</h2>
@@ -1586,16 +2594,48 @@ function showDeleteConfirmationModal() {
 
 // Inicialización
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('DOM cargado');
-    // Mostrar pantalla de carga con mensajes
+  console.log('DOM cargado - Iniciando aplicación');
+  
+  try {
+    // Verificar que los elementos críticos existan
+    if (!elements.loadingScreen || !elements.welcomeScreen || !elements.signupScreen) {
+      console.error('Elementos críticos no encontrados');
+      // Mostrar la página principal directamente
+      showPage('home');
+      return;
+    }
+    
     showLoadingMessages();
-
-    // Inicializar el resto de la app
+    
+    // Inicializar componentes
     await loadLibrary();
     await loadVisualSettings();
-    initializeSettings();
-    initializeQueueControls();
-    handleSignup(); // Manejar el formulario de creación de cuenta
+    
+    // Inicializar búsqueda después de que todo lo demás esté listo
+    setTimeout(() => {
+      try {
+        initializeSearch();
+        initializeSettings();
+        initializeQueueControls();
+        console.log('Todos los componentes inicializados');
+      } catch (error) {
+        console.error('Error al inicializar componentes:', error);
+      }
+    }, 500);
+    
+  } catch (error) {
+    console.error('Error durante la inicialización:', error);
+    if (elements.loadingMessage) {
+      elements.loadingMessage.textContent = 'Error al cargar la aplicación';
+    }
+    // Ocultar pantalla de carga después de 3 segundos
+    setTimeout(() => {
+      if (elements.loadingScreen) {
+        elements.loadingScreen.style.display = 'none';
+      }
+      showPage('home');
+    }, 3000);
+  }
 });
 
 // Control de reproducción
