@@ -1993,3 +1993,208 @@ input:checked + .slider:before {
     height: calc(100vh - 180px);
     overflow-y: auto;
 }
+
+/* Modo Secreto */
+.secret-mode {
+    background-color: #000 !important;
+    color: #fff !important;
+    transition: all 0.5s ease;
+}
+
+.secret-mode .sidebar,
+.secret-mode .titlebar,
+.secret-mode .now-playing-bar {
+    background-color: #000 !important;
+    border-color: #222 !important;
+}
+
+.secret-mode .nav-link,
+.secret-mode .control-btn,
+.secret-mode .track-title,
+.secret-mode .track-artist {
+    color: #fff !important;
+}
+
+.lock-animation {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5rem;
+    z-index: 2000;
+    animation: unlock 2s ease-in-out forwards;
+}
+
+@keyframes unlock {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.5);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+    40% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    }
+    60% {
+        transform: translate(-50%, -50%) rotate(45deg) scale(1);
+    }
+    80% {
+        transform: translate(-50%, -50%) rotate(-20deg) scale(1);
+    }
+    100% {
+        transform: translate(-50%, -50%) rotate(0deg) scale(1);
+        opacity: 0;
+    }
+}
+
+.secret-content {
+    display: none;
+    text-align: center;
+    margin-top: 2rem;
+    animation: fadeIn 1s ease-in-out forwards;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Modo Secreto - Versión 2 */
+.secret-mode-active {
+    background-color: #000 !important;
+    color: #fff !important;
+}
+
+.secret-mode-active * {
+    visibility: hidden !important;
+}
+
+.secret-lock {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 5rem;
+    z-index: 9999;
+    color: #fff;
+}
+
+.secret-lock.closed {
+    animation: shake 0.5s ease-in-out;
+}
+
+.secret-lock.opening {
+    animation: unlock 1.5s ease-in-out forwards;
+}
+
+.secret-lock.open {
+    opacity: 0;
+}
+
+.secret-interface {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    z-index: 9998;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+}
+
+.secret-button {
+    background: transparent;
+    border: 2px solid #ff00ff;
+    color: #ff00ff;
+    padding: 15px 30px;
+    margin: 10px;
+    font-size: 1.2rem;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 200px;
+    text-align: center;
+}
+
+.secret-button:hover {
+    background: #ff00ff;
+    color: #000;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+    20% { transform: translate(-50%, -50%) rotate(10deg); }
+    40% { transform: translate(-50%, -50%) rotate(-10deg); }
+    60% { transform: translate(-50%, -50%) rotate(5deg); }
+    80% { transform: translate(-50%, -50%) rotate(-5deg); }
+}
+
+@keyframes unlock {
+    0% { 
+        transform: translate(-50%, -50%) scale(1) rotate(0deg);
+        opacity: 1;
+    }
+    50% {
+        transform: translate(-50%, -50%) scale(1.5) rotate(180deg);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(0.5) rotate(360deg);
+        opacity: 0;
+    }
+}
+
+/* Modo Secreto - Funciones Avanzadas */
+.secret-panel {
+    display: none;
+    background: #111;
+    padding: 20px;
+    border-radius: 10px;
+    margin-top: 20px;
+    max-width: 80%;
+    text-align: left;
+}
+
+.secret-feature {
+    margin: 15px 0;
+    padding: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.secret-song-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.secret-game-container {
+    text-align: center;
+}
+
+#secretGameCanvas {
+    border: 2px solid #ff00ff;
+    margin-top: 20px;
+}
+
+.game-instructions {
+    font-size: 0.9rem;
+    color: #aaa;
+    margin-top: 10px;
+}
+
+.debug-info {
+    position: fixed;
+    bottom: 10px;
+    left: 10px;
+    font-size: 0.8rem;
+    color: #0f0;
+    font-family: monospace;
+}
