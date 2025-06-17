@@ -13,6 +13,7 @@
   "license": "ISC",
   "dependencies": {
     "@distube/ytdl-core": "^4.16.10",
+    "all": "^0.0.0",
     "bcrypt": "^5.1.1",
     "electron-store": "^8.1.0",
     "fluent-ffmpeg": "^2.1.3",
