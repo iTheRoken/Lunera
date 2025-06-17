@@ -2,6 +2,7 @@ const { ipcRenderer } = require('electron');
 const bcrypt = require('bcrypt');
 const saltRounds = 10;
 const fs = require('fs');
+const { sandboxed } = require('process');
 
 console.log('Renderer.js cargado - Verificando elementos del DOM');
 
@@ -2978,6 +2979,444 @@ function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+// Modo Secreto Completo
+let secretCode = [];
+const secretSequence = ['r', 'o', 'k', 'e', 'n'];
+let secretModeActive = false;
+let debugMode = false;
+const secretSongs = [
+    {title: "Track Oculto 1", artist: "Artista Desconocido", duration: "3:45"},
+    {title: "Melodía Secreta", artist: "Sistema", duration: "2:30"},
+    {title: "Tema de Dev", artist: "RokMusic", duration: "4:15"}
+];
+
+document.addEventListener('keydown', (e) => {
+    if (secretModeActive) return;
+    
+    if (e.key.length === 1 && e.key.match(/[a-z]/i)) {
+        secretCode.push(e.key.toLowerCase());
+        
+        if (secretCode.length > secretSequence.length) {
+            secretCode.shift();
+        }
+        
+        if (secretCode.join('') === secretSequence.join('')) {
+            activateSecretMode();
+            secretCode = [];
+        }
+    }
+});
+
+function activateSecretMode() {
+    if (secretModeActive) return;
+    secretModeActive = true;
+
+    // Reproducir un sonido especial (opcional)
+        const audio = new Audio();
+        audio.src = 'assets/secret-sound.wav'; // Asegúrate de tener este archivo
+        audio.play().catch(e => console.log('No se pudo reproducir el sonido secreto'));
+    
+    // Crear overlay negro
+    const overlay = document.createElement('div');
+    overlay.className = 'secret-mode-active';
+    document.body.appendChild(overlay);
+    
+    // Mostrar candado cerrado
+    const lock = document.createElement('div');
+    lock.className = 'secret-lock closed';
+    lock.innerHTML = '<i class="fas fa-lock"></i>';
+    document.body.appendChild(lock);
+    
+    setTimeout(() => {
+        lock.classList.remove('closed');
+        lock.classList.add('opening');
+        lock.innerHTML = '<i class="fas fa-lock-open"></i>';
+        
+        setTimeout(() => {
+            lock.classList.remove('opening');
+            lock.classList.add('open');
+            
+            // Crear interfaz secreta completa
+            const secretUI = document.createElement('div');
+            secretUI.className = 'secret-interface';
+            secretUI.innerHTML = `
+                <h1 style="color: #ff00ff; margin-bottom: 30px;">MODO DESARROLLADOR</h1>
+                
+                <button class="secret-button" id="secretBtn1">
+                    <i class="fas fa-code"></i> Herramientas Dev
+                </button>
+                <div id="devToolsPanel" class="secret-panel">
+                    <div class="secret-feature">
+                        <h3>Debug Mode</h3>
+                        <button class="secret-button" id="toggleDebugBtn">Activar Debug</button>
+                    </div>
+                    <div class="secret-feature">
+                        <h3>Estado de la Aplicación</h3>
+                        <button class="secret-button" id="dumpStateBtn">Mostrar Estado</button>
+                    </div>
+                    <div class="secret-feature">
+                        <h3>Audio Context</h3>
+                        <button class="secret-button" id="audioInfoBtn">Info Audio</button>
+                    </div>
+                </div>
+                
+                <button class="secret-button" id="secretBtn2">
+                    <i class="fas fa-headphones"></i> Canciones Secretas
+                </button>
+                <div id="songsPanel" class="secret-panel">
+                    ${secretSongs.map(song => `
+                        <div class="secret-song-item">
+                            <div>
+                                <strong>${song.title}</strong><br>
+                                <small>${song.artist} • ${song.duration}</small>
+                            </div>
+                            <button class="secret-button" style="padding: 5px 10px; width: auto;" 
+                                    data-song="${song.title}">
+                                <i class="fas fa-play"></i>
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <button class="secret-button" id="secretBtn3">
+                    <i class="fas fa-gamepad"></i> Mini Juego
+                </button>
+                <div id="gamePanel" class="secret-panel secret-game-container">
+                    <h3>RokMusic Defender</h3>
+                    <canvas id="secretGameCanvas" width="300" height="200"></canvas>
+                    <p class="game-instructions">
+                        Usa las flechas para moverte. Espacio para disparar.
+                        Defiende el reproductor de los bugs!
+                    </p>
+                    <button class="secret-button" id="startGameBtn">Comenzar Juego</button>
+                </div>
+                
+                <button class="secret-button" id="secretExitBtn" style="margin-top: 30px;">
+                    <i class="fas fa-door-open"></i> Salir del Modo Secreto
+                </button>
+            `;
+            
+            document.body.appendChild(secretUI);
+            secretUI.style.display = 'flex';
+
+            // Reproducir un sonido especial (opcional)
+        const audio = new Audio();
+        audio.src = 'assets/secret-sound2.wav'; // Asegúrate de tener este archivo
+        audio.play().catch(e => console.log('No se pudo reproducir el sonido secreto'));
+            
+            // Configurar paneles toggle
+            document.getElementById('secretBtn1').addEventListener('click', () => {
+                document.getElementById('devToolsPanel').style.display = 
+                    document.getElementById('devToolsPanel').style.display === 'block' ? 'none' : 'block';
+            });
+            
+            document.getElementById('secretBtn2').addEventListener('click', () => {
+                document.getElementById('songsPanel').style.display = 
+                    document.getElementById('songsPanel').style.display === 'block' ? 'none' : 'block';
+            });
+            
+            document.getElementById('secretBtn3').addEventListener('click', () => {
+                document.getElementById('gamePanel').style.display = 
+                    document.getElementById('gamePanel').style.display === 'block' ? 'none' : 'block';
+            });
+            
+            // Funciones para herramientas de desarrollo
+            document.getElementById('toggleDebugBtn').addEventListener('click', () => {
+                debugMode = !debugMode;
+                if (debugMode) {
+                    startDebugMode();
+                    showNotification('Modo Debug Activado');
+                    document.getElementById('toggleDebugBtn').innerHTML = '<i class="fas fa-bug"></i> Desactivar Debug';
+                } else {
+                    stopDebugMode();
+                    showNotification('Modo Debug Desactivado');
+                    document.getElementById('toggleDebugBtn').innerHTML = '<i class="fas fa-bug"></i> Activar Debug';
+                }
+            });
+            
+            document.getElementById('dumpStateBtn').addEventListener('click', () => {
+                console.log('Estado de la aplicación:', state);
+                showNotification('Estado volcado a la consola');
+                alert(`Estado actual:
+- Canción: ${state.currentTrack?.title || 'Ninguna'}
+- Reproduciendo: ${state.isPlaying}
+- Volumen: ${state.volume}
+- Modo: ${state.repeat}
+- Shuffle: ${state.shuffle}
+- Ecualizador: Bass=${state.audioSettings.equalizer.bass} Mid=${state.audioSettings.equalizer.mid}
+`);
+            });
+            
+            document.getElementById('audioInfoBtn').addEventListener('click', () => {
+                const info = audioContext ? `
+                    AudioContext estado: ${audioContext.state}
+                    Sample rate: ${audioContext.sampleRate}Hz
+                    Tiempo actual: ${audioContext.currentTime.toFixed(2)}s
+                ` : 'AudioContext no inicializado';
+                console.log('Audio Info:', info);
+                alert(info);
+            });
+            
+            // Funciones para canciones secretas
+            document.querySelectorAll('[data-song]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const songTitle = e.target.closest('button').getAttribute('data-song');
+                    playSecretSong(songTitle);
+                });
+            });
+            
+            // Configurar mini juego
+            document.getElementById('startGameBtn').addEventListener('click', () => {
+                initSecretGame();
+            });
+            
+            // Salir del modo secreto
+            document.getElementById('secretExitBtn').addEventListener('click', () => {
+                secretModeActive = false;
+                const audio = new Audio();
+        audio.src = 'assets/secret-sound3.wav'; // Asegúrate de tener este archivo
+        audio.play().catch(e => console.log('No se pudo reproducir el sonido secreto'));
+                document.querySelector('.secret-mode-active').remove();
+                document.querySelector('.secret-lock').remove();
+                secretUI.remove();
+                if (debugMode) {
+                    debugMode = false;
+                    stopDebugMode();
+                }
+            });
+            
+        }, 1500);
+    }, 1000);
+}
+
+// Funciones del modo desarrollador
+function startDebugMode() {
+    const debugInfo = document.createElement('div');
+    debugInfo.className = 'debug-info';
+    debugInfo.id = 'debugInfo';
+    document.body.appendChild(debugInfo);
+    
+    const updateDebugInfo = () => {
+        if (!debugMode) return;
+        
+        const now = new Date();
+        const debugText = `
+            RokMusic Debug:
+            Time: ${now.toLocaleTimeString()}
+            Audio: ${state.isPlaying ? 'PLAYING' : 'PAUSED'}
+            Current: ${state.currentTrack?.title || 'None'}
+            Volume: ${Math.round(state.volume * 100)}%
+            NodeJS: ${process.versions.node}
+            Chrome: ${process.versions.chrome}
+            Electron: ${process.versions.electron}
+        `;
+        
+        const debugElement = document.getElementById('debugInfo');
+        if (debugElement) {
+            debugElement.textContent = debugText;
+        }
+        
+        requestAnimationFrame(updateDebugInfo);
+    };
+    
+    updateDebugInfo();
+}
+
+function stopDebugMode() {
+    const debugElement = document.getElementById('debugInfo');
+    if (debugElement) {
+        debugElement.remove();
+    }
+}
+
+// Función para reproducir canciones secretas
+function playSecretSong(title) {
+    const secretSong = secretSongs.find(song => song.title === title);
+    if (!secretSong) return;
+    
+    const fakeTrack = {
+        title: secretSong.title,
+        artist: secretSong.artist,
+        duration: 0,
+        url: 'secret://' + encodeURIComponent(title),
+        thumbnail: 'assets/default-track.png'
+    };
+    
+    showNotification(`Reproduciendo: ${secretSong.title}`);
+    playSong(fakeTrack);
+}
+
+// Mini juego secreto
+function initSecretGame() {
+    const canvas = document.getElementById('secretGameCanvas');
+    const ctx = canvas.getContext('2d');
+    let gameRunning = true;
+    
+    // Objeto del jugador
+    const player = {
+        x: canvas.width / 2,
+        y: canvas.height - 30,
+        width: 30,
+        height: 20,
+        speed: 5,
+        color: '#ff00ff'
+    };
+    
+    // Disparos
+    let bullets = [];
+    // Enemigos
+    let enemies = [];
+    // Puntuación
+    let score = 0;
+    
+    // Controles
+    const keys = {
+        ArrowLeft: false,
+        ArrowRight: false,
+        ArrowUp: false,
+        ArrowDown: false,
+        ' ': false
+    };
+    
+    document.addEventListener('keydown', (e) => {
+        if (keys.hasOwnProperty(e.key)) {
+            keys[e.key] = true;
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        if (keys.hasOwnProperty(e.key)) {
+            keys[e.key] = false;
+        }
+    });
+    
+    function drawPlayer() {
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x - player.width/2, player.y - player.height, player.width, player.height);
+    }
+    
+    function drawBullets() {
+        ctx.fillStyle = '#00ffff';
+        bullets.forEach(bullet => {
+            ctx.fillRect(bullet.x - 2, bullet.y - 10, 4, 10);
+        });
+    }
+    
+    function drawEnemies() {
+        ctx.fillStyle = '#ff0000';
+        enemies.forEach(enemy => {
+            ctx.beginPath();
+            ctx.arc(enemy.x, enemy.y, enemy.radius, 0, Math.PI * 2);
+            ctx.fill();
+        });
+    }
+    
+    function drawScore() {
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '16px Arial';
+        ctx.fillText(`Puntuación: ${score}`, 10, 20);
+    }
+    
+    function update() {
+        if (!gameRunning) return;
+        
+        // Mover jugador
+        if (keys.ArrowLeft && player.x > player.width/2) {
+            player.x -= player.speed;
+        }
+        if (keys.ArrowRight && player.x < canvas.width - player.width/2) {
+            player.x += player.speed;
+        }
+        
+        // Disparar
+        if (keys[' ']) {
+            if (!player.lastShot || Date.now() - player.lastShot > 300) {
+                bullets.push({x: player.x, y: player.y - player.height, speed: 7});
+                player.lastShot = Date.now();
+            }
+        }
+        
+        // Mover balas
+        bullets = bullets.filter(bullet => {
+            bullet.y -= bullet.speed;
+            return bullet.y > 0;
+        });
+        
+        // Generar enemigos
+        if (Math.random() < 0.02) {
+            enemies.push({
+                x: Math.random() * canvas.width,
+                y: 0,
+                radius: 10 + Math.random() * 10,
+                speed: 1 + Math.random() * 2
+            });
+        }
+        
+        // Mover enemigos
+        enemies = enemies.filter(enemy => {
+            enemy.y += enemy.speed;
+            
+            // Detectar colisiones con balas
+            const hitIndex = bullets.findIndex(bullet => {
+                const dx = bullet.x - enemy.x;
+                const dy = bullet.y - enemy.y;
+                return Math.sqrt(dx*dx + dy*dy) < enemy.radius;
+            });
+            
+            if (hitIndex !== -1) {
+                bullets.splice(hitIndex, 1);
+                score += Math.floor(enemy.radius);
+                return false;
+            }
+            
+            // Detectar colisión con jugador
+            const playerHit = (
+                player.x > enemy.x - enemy.radius &&
+                player.x < enemy.x + enemy.radius &&
+                player.y - player.height < enemy.y + enemy.radius &&
+                player.y > enemy.y - enemy.radius
+            );
+            
+            if (playerHit) {
+                gameOver();
+                return false;
+            }
+            
+            return enemy.y < canvas.height;
+        });
+    }
+    
+    function render() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawPlayer();
+        drawBullets();
+        drawEnemies();
+        drawScore();
+    }
+    
+    function gameOver() {
+        gameRunning = false;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ff0000';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('GAME OVER', canvas.width/2, canvas.height/2);
+        ctx.font = '16px Arial';
+        ctx.fillText(`Puntuación final: ${score}`, canvas.width/2, canvas.height/2 + 30);
+    }
+    
+    function gameLoop() {
+        update();
+        render();
+        if (gameRunning) {
+            requestAnimationFrame(gameLoop);
+        }
+    }
+    
+    gameLoop();
 }
 
 // Atajos de teclado
