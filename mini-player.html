@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: http: https:; connect-src 'self';">
+  <title>Lunera Mini</title>
+  <link rel="stylesheet" href="mini-player.css">
+  <script defer src="mini-player.js"></script>
+</head>
+<body>
+  <main class="mini-shell" aria-label="Mini reproductor Lunera">
+    <canvas id="spectrumCanvas" class="spectrum-canvas" aria-hidden="true"></canvas>
+    <div class="spectrum-tint" aria-hidden="true"></div>
+
+    <header class="mini-header">
+      <button class="header-chip app-chip" id="showMainBtn" type="button" title="Abrir Lunera">
+        <img src="assets/logo2.png" alt="">
+        <span>Lunera</span>
+      </button>
+      <span class="always-on-top">Siempre encima</span>
+      <button class="window-btn" id="closeBtn" type="button" aria-label="Cerrar mini reproductor">x</button>
+    </header>
+
+    <section class="track-zone">
+      <div class="mini-art-shell">
+        <img id="artwork" class="artwork" alt="" hidden>
+        <div id="emptyArtwork" class="mini-empty-art" aria-hidden="true">
+          <span class="mini-empty-ring"></span>
+          <span class="mini-empty-note"></span>
+          <span class="mini-empty-bars">
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+        </div>
+      </div>
+      <div class="track-copy">
+        <span id="stateLabel" class="state-label">Listo</span>
+        <h1 id="trackTitle">No hay canción seleccionada</h1>
+        <p id="trackArtist">Abre una pista en Lunera</p>
+      </div>
+    </section>
+
+    <section class="timeline-zone" aria-label="Progreso de reproducción">
+      <span id="currentTime">0:00</span>
+      <input id="progressRange" class="range-control" type="range" min="0" max="0" value="0" step="1" aria-label="Posición">
+      <span id="duration">0:00</span>
+    </section>
+
+    <footer class="control-zone">
+      <button class="control-btn" id="previousBtn" type="button" aria-label="Anterior">
+        <img src="assets/backward.png" alt="">
+      </button>
+      <button class="control-btn primary" id="playPauseBtn" type="button" aria-label="Reproducir">
+        <img id="playPauseIcon" src="assets/play.png" alt="">
+      </button>
+      <button class="control-btn" id="nextBtn" type="button" aria-label="Siguiente">
+        <img src="assets/forward.png" alt="">
+      </button>
+
+      <div class="volume-zone">
+        <span class="volume-label">VOL</span>
+        <input id="volumeRange" class="range-control volume-range" type="range" min="0" max="100" value="100" step="1" aria-label="Volumen">
+      </div>
+    </footer>
+
+    <span class="resize-hint" aria-hidden="true"></span>
+  </main>
+</body>
+</html>

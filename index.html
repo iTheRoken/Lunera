@@ -1,64 +1,163 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RokMusic</title>
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https://*; connect-src 'self' https://*; font-src 'self' https://cdnjs.cloudflare.com;">
+    <title>Lunera</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://*; media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; connect-src 'self' https://* http://127.0.0.1:* http://localhost:*; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;">
     <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="notification-styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <!-- Pantalla de carga -->
     <div id="loadingScreen" class="loading-screen">
-        <video id="loadingBackgroundVideo" autoplay loop muted playsinline>
-            <source src="assets/loading-background.mp4" type="video/mp4">
-            Tu navegador no soporta videos.
-        </video>
+        <canvas id="loadingCanvas"></canvas>
         <div class="loading-overlay"></div>
         <div class="loading-content">
-            <div class="loading-spinner"></div>
-            <h2 id="loadingMessage">Inicializando...</h2>
-        </div>
-    </div>
-
-    <!-- Pantalla intermedia con "Hola" -->
-    <div id="welcomeScreen" class="welcome-screen">
-        <div class="welcome-content">
-            <h1 class="welcome-text">Hola</h1>
+            <div class="startup-splash" aria-hidden="true">
+                <div class="startup-orbit">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+                <div class="startup-logo-shell">
+                    <img src="assets/logo2.png" alt="">
+                </div>
+                <h1>Lunera</h1>
+                <div class="startup-progress"><span></span></div>
+            </div>
         </div>
     </div>
 
     <!-- Menú de creación de cuenta e inicio de sesión para usuarios -->
     <div id="signupScreen" class="signup-screen">
-        <video id="backgroundVideo" autoplay loop muted playsinline>
-            <source src="assets/background-video.mp4" type="video/mp4">
-            Tu navegador no soporta videos.
-        </video>
-        <div class="signup-overlay"></div>
-        <div class="signup-content">
-            <h1>¡Bienvenido a RokMusic!</h1>
-            <p id="signupMessage">Crear una cuenta te permite guardar playlists y personalizar tu experiencia.</p>
-            <div class="auth-tabs">
-                <button id="signupTab" class="auth-tab active">Crear cuenta</button>
-                <button id="loginTab" class="auth-tab">Iniciar sesión</button>
+        <div class="signup-background" aria-hidden="true">
+            <div class="signup-grid"></div>
+            <div class="signup-noise"></div>
+            <div class="signup-waveform">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
             </div>
-            <form id="authForm">
-                <div class="form-group">
-                    <label for="username">Nombre de usuario</label>
-                    <input type="text" id="username" placeholder="Ingresa tu nombre de usuario" required>
+        </div>
+
+        <div class="signup-shell">
+            <section class="signup-showcase" aria-label="Lunera">
+                <div class="showcase-brand">
+                    <img src="assets/logo.png" alt="Lunera" class="showcase-logo">
+                    <div>
+                        <span class="showcase-kicker">Lunera Beta</span>
+                        <h1 class="showcase-title">Bienvenido!</h1>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="email">Correo electrónico</label>
-                    <input type="email" id="email" placeholder="Ingresa tu correo electrónico" required>
+
+                <div class="showcase-visual" aria-hidden="true">
+                    <div class="showcase-disc">
+                        <span class="disc-ring"></span>
+                        <img src="assets/logo2.png" alt="">
+                    </div>
+                    <div class="showcase-bars">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label for="password">Contraseña</label>
-                    <input type="password" id="password" placeholder="Ingresa tu contraseña" required>
+
+                <div class="showcase-caption">
+                    <span>Tu música, tu universo</span>
+                    <strong>Listo para escuchar</strong>
                 </div>
-                <button type="submit" class="signup-btn" id="authSubmitBtn">Crear cuenta</button>
-                <button type="button" id="skipSignup" class="skip-btn">Omitir por ahora</button>
-            </form>
+            </section>
+
+            <div class="signup-container">
+                <div class="signup-header">
+                    <span class="signup-eyebrow" id="authModeBadge">Nueva cuenta</span>
+                    <h2 class="signup-title" id="authTitle">Crea tu cuenta</h2>
+                    <p class="signup-subtitle" id="signupMessage">Únete a la experiencia musical definitiva</p>
+                </div>
+
+                <div class="auth-tabs" role="tablist" aria-label="Modo de acceso">
+                    <button id="signupTab" class="auth-tab active" type="button" role="tab" aria-selected="true">Registrarse</button>
+                    <button id="loginTab" class="auth-tab" type="button" role="tab" aria-selected="false">Entrar</button>
+                </div>
+
+                <form id="authForm" class="auth-form">
+                    <div class="input-group" id="usernameGroup">
+                        <label for="username">Usuario</label>
+                        <div class="input-control">
+                            <i class="fas fa-user"></i>
+                            <input type="text" id="username" name="username" placeholder="Nombre de usuario" autocomplete="username" required>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="email">Correo</label>
+                        <div class="input-control">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="email" name="email" placeholder="correo@ejemplo.com" autocomplete="email" required>
+                        </div>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Contraseña</label>
+                        <div class="input-control">
+                            <i class="fas fa-lock"></i>
+                            <input type="password" id="password" name="password" placeholder="Contraseña" autocomplete="new-password" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="submit-btn" id="authSubmitBtn">Crear cuenta</button>
+                </form>
+
+                <button id="skipSignup" class="skip-link" type="button">
+                    <span>Continuar como invitado</span>
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="feedbackPromptScreen" class="feedback-prompt-screen">
+        <div class="feedback-prompt-backdrop"></div>
+        <div class="feedback-prompt-card">
+            <div class="feedback-prompt-badge">Beta feedback</div>
+            <h2 class="feedback-prompt-title">Ayudanos a mejorar Lunera</h2>
+            <p class="feedback-prompt-text">
+                Prueba la app con calma y, cuando quieras compartir tu experiencia, puedes abrir este formulario desde aquí.
+            </p>
+            <a id="feedbackPromptLink" href="https://forms.gle/eFHx1ZnJy9Thf4KM9" class="feedback-prompt-link" target="_blank" rel="noreferrer">
+                https://forms.gle/eFHx1ZnJy9Thf4KM9
+            </a>
+            <div class="feedback-prompt-actions">
+                <button id="openFeedbackFormBtn" class="feedback-prompt-btn primary" type="button">Responder formulario</button>
+                <button id="closeFeedbackPromptBtn" class="feedback-prompt-btn secondary" type="button">Cerrar por ahora</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="interfaceSwitchLoader" class="interface-switch-loader" aria-hidden="true">
+        <div class="interface-switch-panel">
+            <div class="interface-switch-orbit">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+            <strong id="interfaceSwitchTitle">Cambiando interfaz</strong>
+            <p id="interfaceSwitchMessage">Preparando Lunera</p>
         </div>
     </div>
     
@@ -84,8 +183,14 @@
 
         <!-- Sidebar -->
         <div class="sidebar">
-            <div class="logo">
-                <img src="assets/logo.png" alt="Logo" height="40">
+            <div class="sidebar-brand">
+                <div class="brand-icon">
+                    <img src="assets/logo2.png" alt="Lunera" />
+                </div>
+                <div class="brand-meta">
+                    <div class="brand-title">Lunera</div>
+                    <div class="brand-tag">Beta 1.2.0</div>
+                </div>
             </div>
             
             <nav>
@@ -109,9 +214,44 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="mymusic">
+                            <i class="fas fa-music"></i>
+                            <span>Mi Música</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-page="upload">
+                            <i class="fas fa-upload"></i>
+                            <span>Subir Música</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="#" class="nav-link" data-page="settings">
                             <i class="fas fa-cog"></i>
                             <span>Configuración</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-action="spotify-import" id="spotifyImportNavLink">
+                            <i class="fab fa-spotify"></i>
+                            <span>Importar playlist</span>
+                            <span class="spotify-new-badge">Nuevo</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link" data-action="youtube-import" id="youtubeImportNavLink">
+                            <i class="fab fa-youtube"></i>
+                            <span>Importar playlist</span>
+                            <span class="youtube-new-badge">Nuevo</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="#" class="nav-link local-artists-nav-link" data-action="local-artists" id="localArtistsNavLink">
+                            <i class="fas fa-microphone-alt local-artists-nav-icon" aria-hidden="true"></i>
+                            <span class="local-artists-nav-copy">
+                                <span class="local-artists-nav-title">Artistas locales</span>
+                                <span class="local-artists-nav-subtitle">Selección Lunera</span>
+                            </span>
                         </a>
                     </li>
                 </ul>
@@ -121,327 +261,1219 @@
                 <a href="#" class="dedication-link" id="dedicationLink">
                     Hecho con ❤️ por Mateo Luciano Luppoli
                 </a>
+                <button class="dedication-credits-btn" id="dedicationCreditsBtn" type="button">
+                    Creditos
+                </button>
             </div>
         </div>
 
         <!-- Contenido principal -->
         <main class="main-content">
             <div id="home" class="page active">
-                <h1>Bienvenido de nuevo</h1>
-                <div class="recently-played">
-                    <h2>Reproducido recientemente</h2>
-                    <div class="tracks-grid" id="recentTracks">
-                        <!-- Canciones recientes se agregarán aquí -->
-                    </div>
-                </div>
-                <div class="recommendations">
-                    <h2>Recomendaciones para ti</h2>
-                    <div class="tracks-grid" id="recommendations">
-                        <!-- Recomendaciones se agregarán aquí -->
-                    </div>
+                <div class="home-shell">
+                    <section class="home-hero">
+                        <div class="home-hero-copy">
+                            <span class="home-kicker">Lunera Home</span>
+                            <h1>Tu música, lista para continuar.</h1>
+                            <p>Un inicio más limpio para volver a lo que estabas escuchando, descubrir pistas nuevas y moverte rápido por tu biblioteca.</p>
+                            <div class="home-actions">
+                                <button class="home-primary-action" id="heroSearchBtn" type="button">
+                                    <i class="fas fa-search"></i>
+                                    <span>Buscar música</span>
+                                </button>
+                                <button class="home-secondary-action" id="heroMyMusicBtn" type="button">
+                                    <i class="fas fa-compact-disc"></i>
+                                    <span>Mi música</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="home-hero-panel">
+                            <div class="home-hero-panel-top">
+                                <span>Resumen</span>
+                                <i class="fas fa-wave-square"></i>
+                            </div>
+                            <div class="home-metrics">
+                                <div class="home-metric">
+                                    <strong id="totalSongs">0</strong>
+                                    <span>Canciones</span>
+                                </div>
+                                <div class="home-metric">
+                                    <strong id="totalPlaylists">0</strong>
+                                    <span>Playlists</span>
+                                </div>
+                                <div class="home-metric">
+                                    <strong id="recentHeroCount">0</strong>
+                                    <span>Recientes</span>
+                                </div>
+                            </div>
+                            <div class="home-signal" id="homeVisualizer">
+                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="home-grid">
+                        <div class="home-panel home-focus-panel">
+                            <div class="home-panel-header">
+                                <div>
+                                    <span class="home-section-kicker">Continuar</span>
+                                    <h2>Reproducido recientemente</h2>
+                                </div>
+                                <span class="recent-count" id="recentCount">0 canciones</span>
+                            </div>
+                            <div class="recent-tracks-container">
+                                <div class="recent-tracks-grid" id="recentTracks"></div>
+                            </div>
+                        </div>
+
+                        <aside class="home-panel home-recommend-panel">
+                            <div class="home-panel-header compact">
+                                <div>
+                                    <span class="home-section-kicker">Descubrir</span>
+                                    <h2>Para ti</h2>
+                                </div>
+                                <button class="refresh-btn" id="refreshRecommendationsBtn" type="button" title="Actualizar recomendaciones">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
+                            <div class="recommendations-container">
+                                <div class="recommendations-grid" id="recommendationsTracks"></div>
+                            </div>
+                        </aside>
+                    </section>
                 </div>
             </div>
 
-            <!-- Sección de búsqueda mejorada -->
-            <div id="search" class="page">
-                <div class="search-container">
-                    <div class="search-input-wrapper">
-                        <i class="fas fa-search"></i>
-                        <input type="text" id="searchInput" class="search-input" placeholder="Buscar canciones, artistas o álbumes...">
-                        <button id="clearSearch" class="clear-search-btn" style="display: none;">
-                            <i class="fas fa-times"></i>
+            <div id="playlistModal" class="modal" style="display:none;">
+                <div class="modal-content playlist-modal">
+                    <div class="modal-header">
+                        <h3 id="playlistModalTitle">Playlist</h3>
+                        <button id="closePlaylistModal" class="modern-btn danger" title="Cerrar"><i class="fas fa-times"></i></button>
+                    </div>
+                    <div id="playlistSongsList" class="playlist-songs-list"></div>
+                </div>
+                <div class="modal-backdrop"></div>
+            </div>
+
+            <div id="search" class="page search-page">
+                <div class="search-workspace">
+                    <section class="search-hero" aria-labelledby="searchTitle">
+                        <div class="search-hero-copy">
+                            <span class="search-eyebrow">
+                                <i class="fas fa-wave-square"></i>
+                                Buscar música
+                            </span>
+                            <div class="search-title-row">
+                                <h1 id="searchTitle">Buscar</h1>
+                                <span class="search-live-pill" id="searchLivePill">
+                                    <span></span>
+                                    Listo
+                                </span>
+                            </div>
+                            <p class="search-subtitle">Descubre tu nueva música favorita.</p>
+                        </div>
+                        <div class="search-hero-visual" aria-hidden="true">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </section>
+                    
+                    <section class="search-console" aria-label="Buscar música">
+                        <div class="search-container">
+                            <div class="search-input-wrapper">
+                                <i class="fas fa-search search-icon"></i>
+                                <input type="text" id="searchInput" class="search-input" placeholder="¿Qué quieres escuchar?" autocomplete="off" spellcheck="false">
+                                <button class="search-clear-btn" id="searchClearBtn" type="button" title="Limpiar búsqueda" style="display: none;">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            
+                            <div class="search-controls-row">
+                                <!-- Filtros de búsqueda -->
+                                <div class="search-filters" aria-label="Filtrar resultados">
+                                    <button class="filter-btn active" data-filter="all" type="button">
+                                        <i class="fas fa-layer-group"></i>
+                                        <span>Todos</span>
+                                    </button>
+                                    <button class="filter-btn" data-filter="songs" type="button">
+                                        <i class="fas fa-music"></i>
+                                        <span>Canciones</span>
+                                    </button>
+                                    <button class="filter-btn" data-filter="playlists" type="button">
+                                        <i class="fas fa-list-ul"></i>
+                                        <span>Playlists</span>
+                                    </button>
+                                </div>
+
+                                <div class="search-tools" aria-label="Opciones de resultados">
+                                    <label class="search-sort">
+                                        <i class="fas fa-sort-amount-down"></i>
+                                        <select id="searchSortSelect" class="search-sort-select" aria-label="Ordenar resultados">
+                                            <option value="relevance">Relevancia</option>
+                                            <option value="duration">Duración</option>
+                                            <option value="date">Fecha</option>
+                                        </select>
+                                    </label>
+                                    <div class="search-view-toggle" aria-label="Cambiar vista">
+                                        <button class="search-view-btn active" id="searchGridViewBtn" data-view="grid" type="button" title="Vista en cuadrícula">
+                                            <i class="fas fa-grip"></i>
+                                        </button>
+                                        <button class="search-view-btn" id="searchListViewBtn" data-view="list" type="button" title="Vista en lista">
+                                            <i class="fas fa-list"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sugerencias de búsqueda -->
+                        <div class="search-suggestions" id="searchSuggestions" style="display: none;">
+                            <div class="suggestions-header">
+                                <h3>Búsquedas recientes</h3>
+                                <button class="clear-history-btn" id="clearHistoryBtn" type="button">Limpiar historial</button>
+                            </div>
+                            <div class="suggestions-list" id="suggestionsList">
+                                <!-- Sugerencias se agregarán aquí -->
+                            </div>
+                        </div>
+
+                        <!-- Resultados de búsqueda -->
+                        <div class="search-results-container" id="searchResultsContainer">
+                            <div class="search-results-toolbar" id="searchResultsToolbar" style="display: none;">
+                                <div>
+                                    <span class="search-results-kicker">Resultados</span>
+                                    <strong id="searchResultsSummary">Listo para buscar</strong>
+                                </div>
+                                <span class="search-results-query" id="searchResultsQuery"></span>
+                            </div>
+                            <div class="search-results" id="searchResults">
+                                <!-- Resultados de búsqueda se agregarán aquí -->
+                            </div>
+                        </div>
+
+                        <!-- Estado de búsqueda -->
+                        <div class="search-state" id="searchState">
+                            <div class="search-placeholder">
+                                <div class="search-placeholder-icon">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                                <h3>Busca tu música favorita</h3>
+                                <p>Encuentra las canciones que te gustan</p>
+                                <div class="search-discovery-grid">
+                                    <div class="search-discovery-panel">
+                                        <div class="search-discovery-header">
+                                            <i class="fas fa-clock-rotate-left"></i>
+                                            <span>Recientes</span>
+                                        </div>
+                                        <div class="search-chip-list" id="searchRecentChips"></div>
+                                    </div>
+                                    <div class="search-discovery-panel">
+                                        <div class="search-discovery-header">
+                                            <i class="fas fa-bolt"></i>
+                                            <span>Sugerencias rápidas</span>
+                                        </div>
+                                        <div class="search-chip-list" id="searchQuickSuggestions">
+                                            <button class="search-chip" type="button" data-search-query="lofi">lofi</button>
+                                            <button class="search-chip" type="button" data-search-query="rock argentino">rock argentino</button>
+                                            <button class="search-chip" type="button" data-search-query="pop latino">pop latino</button>
+                                            <button class="search-chip" type="button" data-search-query="indie">indie</button>
+                                            <button class="search-chip" type="button" data-search-query="electronica">electronica</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <div id="library" class="page library-page">
+                <div class="library-workspace">
+                    <section class="library-hero" aria-labelledby="libraryTitle">
+                        <div class="library-hero-copy">
+                            <span class="library-eyebrow">
+                                <i class="fas fa-record-vinyl"></i>
+                                Archivo Lunera
+                            </span>
+                            <h1 class="library-title" id="libraryTitle">Biblioteca</h1>
+                            <p class="library-description">Playlists y favoritos en una vista rápida, densa y hecha para escritorio.</p>
+                            <div class="library-stats" aria-label="Resumen de biblioteca">
+                                <span class="library-stat-item" id="libraryTotalSongs">0 canciones</span>
+                                <span class="library-stat-item" id="libraryTotalPlaylists">0 playlists</span>
+                            </div>
+                            <div class="library-hero-actions">
+                                <button class="library-action-btn primary" id="libraryShuffleBtn" type="button" title="Mezclar biblioteca">
+                                    <i class="fas fa-shuffle"></i>
+                                    <span>Mezclar</span>
+                                </button>
+                                <button class="library-action-btn secondary" id="libraryHeroCreateBtn" type="button" title="Crear playlist">
+                                    <i class="fas fa-plus"></i>
+                                    <span>Playlist</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <aside class="library-live-panel" aria-label="Actividad de biblioteca">
+                            <div class="library-spectrum" aria-hidden="true">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </div>
+                            <div class="library-live-copy">
+                                <span>Actividad</span>
+                                <strong id="librarySignalLabel">Colección lista</strong>
+                            </div>
+                        </aside>
+                    </section>
+
+                    <section class="library-metrics" aria-label="Métricas de biblioteca">
+                        <article class="library-metric-card accent-green">
+                            <span>Canciones</span>
+                            <strong id="librarySongsCount">0</strong>
+                            <small>guardadas</small>
+                        </article>
+                        <article class="library-metric-card accent-cyan">
+                            <span>Playlists</span>
+                            <strong id="libraryPlaylistsCount">0</strong>
+                            <small>colecciones</small>
+                        </article>
+                        <article class="library-metric-card accent-coral">
+                            <span>Favoritos</span>
+                            <strong id="libraryFavoritesCount">0</strong>
+                            <small>seleccionados</small>
+                        </article>
+                    </section>
+
+                    <nav class="library-nav" aria-label="Secciones de biblioteca">
+                        <button class="library-nav-btn active" data-section="playlists" type="button">
+                            <i class="fas fa-layer-group"></i>
+                            <span>Playlists</span>
                         </button>
-                    </div>
-                    <div class="search-filters">
-                        <button class="filter-btn active" data-filter="all">Todo</button>
-                        <button class="filter-btn" data-filter="songs">Canciones</button>
-                        <button class="filter-btn" data-filter="artists">Artistas</button>
-                        <button class="filter-btn" data-filter="albums">Álbumes</button>
-                        <button class="filter-btn" data-filter="playlists">Playlists</button>
-                    </div>
-                </div>
-                
-                <div class="search-results-container">
-                    <div class="search-sections">
-                        <!-- Resultados principales -->
-                        <div class="search-section" id="topResultsSection">
-                            <h2>Resultados principales</h2>
-                            <div class="top-results-grid" id="topResults"></div>
-                        </div>
-                        
-                        <!-- Resultados por categoría -->
-                        <div class="search-section" id="songsSection">
-                            <div class="section-header">
-                                <h2>Canciones</h2>
-                                <a href="#" class="see-all">Ver todo</a>
+                        <button class="library-nav-btn" data-section="favorites" type="button">
+                            <i class="fas fa-heart"></i>
+                            <span>Favoritos</span>
+                        </button>
+                    </nav>
+
+                    <div class="library-content" id="libraryContentView">
+                        <section class="library-section active" id="playlistsSection">
+                            <div class="library-section-header">
+                                <div class="library-section-title">
+                                    <span class="library-section-kicker">Colecciones</span>
+                                    <h2>Playlists</h2>
+                                </div>
+                                <div class="library-section-actions">
+                                    <span class="library-section-count" id="playlistsCount">0 playlists</span>
+                                    <button class="library-create-btn" id="createPlaylistBtn" type="button" title="Crear playlist">
+                                        <i class="fas fa-plus"></i>
+                                        <span>Crear</span>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="tracks-grid" id="songsResults"></div>
-                        </div>
-                        
-                        <div class="search-section" id="artistsSection">
-                            <div class="section-header">
-                                <h2>Artistas</h2>
-                                <a href="#" class="see-all">Ver todo</a>
+                            <div id="playlistsContainer" class="playlists-container library-card-grid">
+                                <!-- Playlists se cargarán aquí -->
                             </div>
-                            <div class="artists-grid" id="artistsResults"></div>
-                        </div>
-                        
-                        <div class="search-section" id="albumsSection">
-                            <div class="section-header">
-                                <h2>Álbumes</h2>
-                                <a href="#" class="see-all">Ver todo</a>
+                        </section>
+
+                        <section class="library-section" id="favoritesSection">
+                            <div class="library-section-header">
+                                <div class="library-section-title">
+                                    <span class="library-section-kicker">Selección rápida</span>
+                                    <h2>Favoritos</h2>
+                                </div>
+                                <div class="library-section-actions">
+                                    <span class="library-section-count" id="favoritesCount">0 canciones</span>
+                                    <button class="library-delete-btn" id="deleteAllFavoritesBtn" type="button" title="Eliminar favoritos" style="display: none;">
+                                        <i class="fas fa-trash"></i>
+                                        <span>Vaciar</span>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="albums-grid" id="albumsResults"></div>
-                        </div>
-                        
-                        <div class="search-section" id="playlistsSection">
-                            <div class="section-header">
-                                <h2>Playlists</h2>
-                                <a href="#" class="see-all">Ver todo</a>
+                            <div id="favoritesContainer" class="favorites-container library-track-list">
+                                <!-- Favoritos se cargarán aquí -->
                             </div>
-                            <div class="playlists-grid" id="playlistsResults"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Estado de carga -->
-                    <div class="search-loading" id="searchLoading" style="display: none;">
-                        <div class="loading-spinner"></div>
-                        <p>Buscando...</p>
-                    </div>
-                    
-                    <!-- Sin resultados -->
-                    <div class="no-results" id="noResults" style="display: none;">
-                        <i class="fas fa-search"></i>
-                        <h3>No se encontraron resultados</h3>
-                        <p>Intenta con términos diferentes</p>
+                        </section>
+
                     </div>
                 </div>
             </div>
 
-            <div id="library" class="page">
+            <div id="mymusic" class="page">
+                <!-- My Music Header -->
                 <div class="library-header">
-                    <h1>Tu Biblioteca</h1>
-                    <div class="library-filters">
-                        <button class="filter-btn active">Playlists</button>
-                        <button class="filter-btn">Favoritos</button>
-                    </div>
-                </div>
-                <div class="library-content" id="libraryContent">
-                    <div class="playlist-section" id="playlistsSection">
-                        <h2>Playlists</h2>
-                        <button id="createPlaylistBtn" class="create-playlist-btn">
-                            <i class="fas fa-plus"></i> Crear nueva playlist
-                        </button>
-                        <div id="playlistsContainer">
-                            <p>No hay playlists. Crea una nueva.</p>
+                    <div class="library-header-content">
+                        <div class="library-title-section">
+                            <h1 class="library-title">Mi Música</h1>
+                            <div class="library-stats">
+                                <span class="library-stat-item" id="myMusicTotalSongs">0 canciones</span>
+                            </div>
+                        </div>
+                        <div class="library-quick-actions">
+                            <button class="library-quick-btn" id="myMusicShuffleBtn">
+                                <i class="fas fa-random"></i>
+                                <span>Mezclar todo</span>
+                            </button>
+                            <button class="library-quick-btn" id="uploadMusicBtn">
+                                <i class="fas fa-upload"></i>
+                                <span>Subir Música</span>
+                            </button>
                         </div>
                     </div>
-                    <div class="favorites-section" id="favoritesSection" style="display: none;">
-                        <h2>Favoritos</h2>
-                        <div id="favoritesContainer">
-                            <p>No hay canciones en tus favoritos.</p>
+                </div>
+
+                <!-- My Music Content -->
+                <div class="my-music-content">
+                    <div class="my-music-container" id="myMusicContainer">
+                        <!-- Música local se cargarán aquí -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="upload" class="page">
+                <div class="upload-header">
+                    <h1><i class="fas fa-upload"></i> Subir Mi Música</h1>
+                    <p class="upload-subtitle">Agrega tu música local a Lunera</p>
+                </div>
+                <div class="upload-content">
+                    <div class="upload-section">
+                        <div class="upload-area" id="uploadArea">
+                            <div class="upload-icon">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                            </div>
+                            <h3>Arrastra y suelta tus archivos de música aquí</h3>
+                            <p>o</p>
+                            <button id="selectFilesBtn" class="select-files-btn">
+                                <i class="fas fa-folder-open"></i> Seleccionar Archivos
+                            </button>
+                            <input type="file" id="fileInput" multiple accept="audio/*" style="display: none;">
+                            <div class="supported-formats">
+                                <p>Formatos soportados: MP3, WAV, FLAC, AAC, OGG</p>
+                            </div>
+                        </div>
+                        
+                        <div class="upload-progress" id="uploadProgress" style="display: none;">
+                            <h3>Subiendo archivos...</h3>
+                            <div class="progress-bar-container">
+                                <div class="progress-bar-fill" id="progressBarFill"></div>
+                            </div>
+                            <div class="upload-status" id="uploadStatus">Preparando...</div>
+                        </div>
+                        
+                        <div class="uploaded-files" id="uploadedFiles">
+                            <h3>Archivos subidos recientemente</h3>
+                            <div class="files-list" id="filesList">
+                                <p class="no-files">No hay archivos subidos aún</p>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
 
             <div id="settings" class="page">
+                <!-- Settings Header -->
                 <div class="settings-header">
-                    <h1>Configuración</h1>
-                    <p class="settings-subtitle">Personaliza tu experiencia en RokMusic</p>
-                </div>
-                <div class="settings-content">
-                    <!-- Audio Settings -->
-                    <div class="settings-section">
-                        <h2><i class="fas fa-volume-up"></i> Configuración de Audio</h2>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Ecualizador</span>
-                                <span class="setting-description">Ajusta los niveles de frecuencia para personalizar el sonido</span>
-                            </div>
-                            <div class="setting-control">
-                                <button id="openEqualizerBtn" class="action-btn">Abrir Ecualizador</button>
-                            </div>
+                    <div class="settings-header-content">
+                        <div class="settings-title-section">
+                            <span class="settings-eyebrow">Centro de control</span>
+                            <h1 class="settings-title">Configuración</h1>
+                            <p class="settings-subtitle">Personaliza tu experiencia musical perfecta</p>
                         </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Crossfade</span>
-                                <span class="setting-description">Transición suave entre canciones (0-10 segundos)</span>
-                            </div>
-                            <div class="setting-control">
-                                <input type="range" id="crossfadeSlider" min="0" max="10" value="0" class="slider-range">
-                                <span id="crossfadeValue">0s</span>
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Normalización de Volumen</span>
-                                <span class="setting-description">Ajusta automáticamente el volumen entre canciones</span>
-                            </div>
-                            <div class="setting-control">
-                                <label class="switch">
-                                    <input type="checkbox" id="normalizeVolumeToggle">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Visual Settings -->
-                    <div class="settings-section">
-                        <h2><i class="fas fa-eye"></i> Configuración Visual</h2>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Fondo Brillante</span>
-                                <span class="setting-description">Muestra un fondo animado que reacciona al ritmo de la música</span>
-                            </div>
-                            <div class="setting-control">
-                                <label class="switch">
-                                    <input type="checkbox" id="visualizerToggle">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">GIF de Reproducción</span>
-                                <span class="setting-description">Muestra un GIF animado durante la reproducción</span>
-                            </div>
-                            <div class="setting-control">
-                                <label class="switch">
-                                    <input type="checkbox" id="gifToggle">
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="gif-settings" style="display: none;">
-                            <input type="file" id="gifInput" accept=".gif" class="gif-input">
-                            <button id="uploadGif" class="upload-btn">
-                                <i class="fas fa-upload"></i> Subir GIF
+                        <div class="settings-quick-actions">
+                            <button class="settings-quick-btn" id="resetSettingsBtn">
+                                <i class="fas fa-undo"></i>
+                                <span>Restablecer</span>
                             </button>
-                            <div id="gifPreview" class="gif-preview">
-                                <img src="" alt="GIF Preview" style="display: none;">
-                                <button class="remove-gif">
-                                    <i class="fas fa-times"></i>
-                                </button>
+                            <button class="settings-quick-btn" id="exportSettingsBtn">
+                                <i class="fas fa-download"></i>
+                                <span>Exportar</span>
+                            </button>
+                            <button class="settings-quick-btn spotify-import-btn" id="importSpotifyPlaylistBtn" type="button" data-tooltip="Importar playlist de Spotify">
+                                <span>Importar playlist de Spotify</span>
+                                <i class="fab fa-spotify spotify-icon-behind" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="settings-summary-grid">
+                        <div class="settings-summary-card">
+                            <span class="settings-summary-label">Tema activo</span>
+                            <strong class="settings-summary-value" id="settingsThemeLabel">Oscuro</strong>
+                        </div>
+                        <div class="settings-summary-card">
+                            <span class="settings-summary-label">Calidad de streaming</span>
+                            <strong class="settings-summary-value" id="settingsStreamingLabel">Media</strong>
+                        </div>
+                        <div class="settings-summary-card">
+                            <span class="settings-summary-label">Biblioteca</span>
+                            <strong class="settings-summary-value" id="settingsLibraryCount">0 canciones</strong>
+                        </div>
+                        <div class="settings-summary-card">
+                            <span class="settings-summary-label">Modo desarrollador</span>
+                            <strong class="settings-summary-value" id="settingsDeveloperLabel">Desactivado</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Settings Navigation -->
+                <div class="settings-nav">
+                    <button class="settings-nav-btn active" data-section="audio">
+                        <i class="fas fa-volume-up"></i>
+                        <span>Audio</span>
+                    </button>
+                    <button class="settings-nav-btn" data-section="visual">
+                        <i class="fas fa-eye"></i>
+                        <span>Visual</span>
+                    </button>
+                    <button class="settings-nav-btn" data-section="playback">
+                        <i class="fas fa-play-circle"></i>
+                        <span>Reproducción</span>
+                    </button>
+                    <button class="settings-nav-btn" data-section="account">
+                        <i class="fas fa-user"></i>
+                        <span>Cuenta</span>
+                    </button>
+                    <button class="settings-nav-btn" data-section="data">
+                        <i class="fas fa-database"></i>
+                        <span>Datos</span>
+                    </button>
+                    <button class="settings-nav-btn" data-section="advanced">
+                        <i class="fas fa-cog"></i>
+                        <span>Avanzado</span>
+                    </button>
+                </div>
+
+                <!-- Settings Content -->
+                <div class="settings-content">
+                    <!-- Audio Settings Section -->
+                    <div class="settings-section active" id="audioSection">
+                        <div class="settings-section-header">
+                            <div class="settings-section-title">
+                                <h2><i class="fas fa-volume-up"></i> Configuración de Audio</h2>
+                                <span class="settings-section-description">Personaliza la experiencia de sonido</span>
                             </div>
                         </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Tema de la Interfaz</span>
-                                <span class="setting-description">Elige entre modo oscuro, claro o personalizado</span>
+                        <div class="settings-grid">
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-sliders-h"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Ecualizador</h3>
+                                        <p>Ajusta los niveles de frecuencia para personalizar el sonido</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <button id="openEqualizerBtn" class="modern-btn primary">
+                                        <i class="fas fa-external-link-alt"></i>
+                                        <span>Abrir Ecualizador</span>
+                                    </button>
+                                </div>
                             </div>
-                            <div class="setting-control">
-                                <select id="themeSelector">
-                                    <option value="dark">Oscuro</option>
-                                    <option value="light">Claro</option>
-                                    <option value="custom">Personalizado</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Color de Acento</span>
-                                <span class="setting-description">Personaliza el color principal de la interfaz</span>
-                            </div>
-                            <div class="setting-control">
-                                <input type="color" id="accentColorPicker" value="#1db954">
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-balance-scale"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Normalización de Volumen</h3>
+                                        <p>Ajusta automáticamente el volumen entre canciones</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="normalizeVolumeToggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Playback Settings -->
-                    <div class="settings-section">
-                        <h2><i class="fas fa-play-circle"></i> Configuración de Reproducción</h2>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Reproducción Automática</span>
-                                <span class="setting-description">Continúa reproduciendo canciones similares al terminar una lista</span>
-                            </div>
-                            <div class="setting-control">
-                                <label class="switch">
-                                    <input type="checkbox" id="autoplayToggle">
-                                    <span class="slider round"></span>
-                                </label>
+                    <!-- Visual Settings Section -->
+                    <div class="settings-section" id="visualSection">
+                        <div class="settings-section-header">
+                            <div class="settings-section-title">
+                                <h2><i class="fas fa-eye"></i> Configuración Visual</h2>
+                                <span class="settings-section-description">Personaliza la apariencia y efectos visuales</span>
                             </div>
                         </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Cola Automática</span>
-                                <span class="setting-description">Añade recomendaciones automáticamente a la cola</span>
+                        <div class="settings-grid">
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-wave-square"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Espectrograma Visual</h3>
+                                        <p>Muestra un espectrograma animado que reacciona al ritmo</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="visualizerToggle" checked>
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-control">
-                                <label class="switch">
-                                    <input type="checkbox" id="autoQueueToggle">
-                                    <span class="slider round"></span>
-                                </label>
+
+                            <div class="setting-card visualizer-opacity-card" id="visualizerOpacityControl" style="display: none;">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-circle-half-stroke"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Opacidad del Espectrograma</h3>
+                                        <p>Ajusta la intensidad visual del espectrograma a tu gusto</p>
+                                    </div>
+                                </div>
+                                <div class="visualizer-opacity-control">
+                                    <input type="range" id="visualizerOpacitySlider" min="0" max="100" step="1" value="40">
+                                    <span id="visualizerOpacityValue">40%</span>
+                                </div>
+                            </div>
+
+                            <!-- Latidos de Fondo eliminado -->
+
+                            <div class="setting-card gif-settings-card" style="display: none;">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-upload"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Subir GIF Personalizado</h3>
+                                        <p>Agrega tu propio GIF para la reproducción</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="gif-upload-container">
+                                        <input type="file" id="gifInput" accept=".gif" class="gif-input">
+                                        <button id="uploadGif" class="modern-btn secondary">
+                                            <i class="fas fa-upload"></i>
+                                            <span>Seleccionar GIF</span>
+                                        </button>
+                                        <div id="gifPreview" class="gif-preview">
+                                            <img src="" alt="GIF Preview" style="display: none;">
+                                            <button class="remove-gif modern-btn danger">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-palette"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Tema de la Interfaz</h3>
+                                        <p>Elige entre modo oscuro, claro o personalizado</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="theme-selector">
+                                        <button class="theme-option active" data-theme="dark">
+                                            <i class="fas fa-moon"></i>
+                                            <span>Oscuro</span>
+                                        </button>
+                                        <button class="theme-option" data-theme="light">
+                                            <i class="fas fa-sun"></i>
+                                            <span>Claro</span>
+                                        </button>
+                                        <button class="theme-option" data-theme="custom">
+                                            <i class="fas fa-paint-brush"></i>
+                                            <span>Personalizado</span>
+                                        </button>
+                                        <button id="clearSearchHistoryBtn" class="modern-btn secondary" type="button">
+                                            <i class="fas fa-eraser"></i>
+                                            <span>Limpiar Busquedas</span>
+                                        </button>
+                                        <button id="clearRecentTracksBtn" class="modern-btn secondary" type="button">
+                                            <i class="fas fa-history"></i>
+                                            <span>Limpiar Recientes</span>
+                                        </button>
+                                        <button id="resetPlayerStateBtn" class="modern-btn secondary" type="button">
+                                            <i class="fas fa-rotate-left"></i>
+                                            <span>Resetear Reproductor</span>
+                                        </button>
+                                    </div>
+                                    
+                                    <!-- Custom Theme Controls (Hidden by default) -->
+                                    <div id="customThemeControls" class="custom-theme-controls" style="display: none; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1);">
+                                        <div class="custom-color-group">
+                                            <label>Fondo Principal</label>
+                                            <div class="color-input-wrapper">
+                                                <input type="color" id="customBgDark" value="#121212">
+                                                <span class="color-value">#121212</span>
+                                            </div>
+                                        </div>
+                                        <div class="custom-color-group">
+                                            <label>Fondo Secundario</label>
+                                            <div class="color-input-wrapper">
+                                                <input type="color" id="customBgLight" value="#1a1a1a">
+                                                <span class="color-value">#1a1a1a</span>
+                                            </div>
+                                        </div>
+                                        <div class="custom-color-group">
+                                            <label>Texto Principal</label>
+                                            <div class="color-input-wrapper">
+                                                <input type="color" id="customTextPrimary" value="#ffffff">
+                                                <span class="color-value">#ffffff</span>
+                                            </div>
+                                        </div>
+                                        <div class="custom-color-group">
+                                            <label>Texto Secundario</label>
+                                            <div class="color-input-wrapper">
+                                                <input type="color" id="customTextSecondary" value="#b3b3b3">
+                                                <span class="color-value">#b3b3b3</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card interface-mode-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-layer-group"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Interfaz de Lunera</h3>
+                                        <p>Cambia entre la apariencia antigua y la nueva interfaz Neo</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="interface-mode-selector" role="group" aria-label="Interfaz de Lunera">
+                                        <button class="interface-mode-option active" data-interface-mode="classic" type="button">
+                                            <i class="fas fa-desktop"></i>
+                                            <span>Antigua</span>
+                                        </button>
+                                        <button class="interface-mode-option" data-interface-mode="neo" type="button">
+                                            <i class="fas fa-wand-magic-sparkles"></i>
+                                            <span>Nueva Neo</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-tint"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Color de Acento</h3>
+                                        <p>Personaliza el color principal de la interfaz</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="accent-control">
+                                        <div class="accent-preview-shell">
+                                            <div id="accentColorPreview" class="accent-color-preview"></div>
+                                            <div class="accent-preview-copy">
+                                                <span class="accent-preview-label">Color activo</span>
+                                                <strong id="accentColorHex">#1DB954</strong>
+                                            </div>
+                                        </div>
+                                        <div class="accent-actions">
+                                            <label class="accent-picker-button" for="accentColorPicker">
+                                                <i class="fas fa-eye-dropper"></i>
+                                                <span>Elegir tono</span>
+                                            </label>
+                                            <input type="color" id="accentColorPicker" value="#1db954" class="modern-color-picker">
+                                            <button id="randomAccentBtn" class="modern-btn secondary accent-random-btn" type="button">
+                                                <i class="fas fa-shuffle"></i>
+                                                <span>Aleatorio</span>
+                                            </button>
+                                        </div>
+                                        <div class="accent-presets-grid">
+                                            <button class="color-preset" data-color="#1db954" title="Verde Aurora"><span>Verde Aurora</span></button>
+                                            <button class="color-preset" data-color="#00c2ff" title="Azul Neón"><span>Azul Neón</span></button>
+                                            <button class="color-preset" data-color="#ff6b6b" title="Coral Vivo"><span>Coral Vivo</span></button>
+                                            <button class="color-preset" data-color="#f59e0b" title="Ámbar"><span>Ámbar</span></button>
+                                            <button class="color-preset" data-color="#8b5cf6" title="Violeta"><span>Violeta</span></button>
+                                            <button class="color-preset" data-color="#14b8a6" title="Turquesa"><span>Turquesa</span></button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Account Settings -->
-                    <div class="settings-section">
-                        <h2><i class="fas fa-user"></i> Configuración de Cuenta</h2>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Nombre de Usuario</span>
-                                <span class="setting-description">Actualiza tu nombre de usuario</span>
-                            </div>
-                            <div class="setting-control">
-                                <input type="text" id="usernameInput" placeholder="Tu nombre de usuario">
+                    <!-- Playback Settings Section -->
+                    <div class="settings-section" id="playbackSection">
+                        <div class="settings-section-header">
+                            <div class="settings-section-title">
+                                <h2><i class="fas fa-play-circle"></i> Configuración de Reproducción</h2>
+                                <span class="settings-section-description">Controla cómo se reproduce tu música</span>
                             </div>
                         </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Correo Electrónico</span>
-                                <span class="setting-description">Actualiza tu correo electrónico</span>
+                        <div class="settings-grid">
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-play"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Reproducción Automática</h3>
+                                        <p>Continúa reproduciendo canciones similares al terminar una lista</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="autoplayToggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-control">
-                                <input type="email" id="emailInput" placeholder="Tu correo electrónico">
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-list"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Cola Automática</h3>
+                                        <p>Añade recomendaciones automáticamente a la cola</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="autoQueueToggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                        </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Cambiar Contraseña</span>
-                                <span class="setting-description">Actualiza tu contraseña</span>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-random"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Mezcla Inteligente</h3>
+                                        <p>Mezcla automáticamente las canciones para una mejor experiencia</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="smartShuffleToggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                </div>
                             </div>
-                            <div class="setting-control">
-                                <button id="changePasswordBtn" class="action-btn">Cambiar Contraseña</button>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-volume-up"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Volumen Inicial</h3>
+                                        <p>Establece el volumen por defecto al iniciar la aplicación</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="volume-stepper-card" id="defaultVolumeControl">
+                                        <div class="volume-stepper-display">
+                                            <span class="volume-stepper-label">Volumen elegido</span>
+                                            <strong id="defaultVolumeValue">50%</strong>
+                                        </div>
+                                        <div class="volume-presets" id="defaultVolumePresets">
+                                            <button type="button" class="volume-preset-btn" data-volume="0">0%</button>
+                                            <button type="button" class="volume-preset-btn" data-volume="25">25%</button>
+                                            <button type="button" class="volume-preset-btn" data-volume="50">50%</button>
+                                            <button type="button" class="volume-preset-btn" data-volume="75">75%</button>
+                                            <button type="button" class="volume-preset-btn" data-volume="100">100%</button>
+                                        </div>
+                                        <div class="setting-inline-meta">
+                                            <span id="defaultVolumeHint" class="setting-status">Se aplica al iniciar la app y al cambiar de pista</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Data Management -->
-                    <div class="settings-section">
-                        <h2><i class="fas fa-database"></i> Gestión de Datos</h2>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Exportar Datos</span>
-                                <span class="setting-description">Descarga tus playlists y configuraciones</span>
-                            </div>
-                            <div class="setting-control">
-                                <button id="exportDataBtn" class="action-btn">Exportar</button>
+                    <!-- Account Settings Section -->
+                    <div class="settings-section" id="accountSection">
+                        <div class="settings-section-header">
+                            <div class="settings-section-title">
+                                <h2><i class="fas fa-user"></i> Configuración de Cuenta</h2>
+                                <span class="settings-section-description">Gestiona tu perfil y datos personales</span>
                             </div>
                         </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Importar Datos</span>
-                                <span class="setting-description">Carga tus playlists y configuraciones desde un archivo</span>
+                        <div class="settings-grid">
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-user-circle"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Nombre de Usuario</h3>
+                                        <p>Actualiza tu nombre de usuario</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="text" id="usernameInput" placeholder="Tu nombre de usuario" class="modern-input">
+                                </div>
                             </div>
-                            <div class="setting-control">
-                                <input type="file" id="importDataInput" accept=".json" class="gif-input">
-                                <button id="importDataBtn" class="action-btn">Importar</button>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-envelope"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Correo Electrónico</h3>
+                                        <p>Actualiza tu correo electrónico</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <input type="email" id="emailInput" placeholder="Tu correo electrónico" class="modern-input">
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-lock"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Cambiar Contraseña</h3>
+                                        <p>Actualiza tu contraseña de forma segura</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <button id="changePasswordBtn" class="modern-btn primary">
+                                        <i class="fas fa-key"></i>
+                                        <span>Cambiar Contraseña</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <span class="setting-title">Restablecer Aplicación</span>
-                                <span class="setting-description">Elimina todas las playlists, canciones recientes, recomendaciones y configuraciones</span>
+                    </div>
+
+                    <!-- Data Management Section -->
+                    <div class="settings-section" id="dataSection">
+                        <div class="settings-section-header">
+                            <div class="settings-section-title">
+                                <h2><i class="fas fa-database"></i> Gestión de Datos</h2>
+                                <span class="settings-section-description">Administra tus datos y configuraciones</span>
                             </div>
-                            <div class="setting-control">
-                                <button id="deleteAllDataBtn" class="delete-btn">
-                                    <i class="fas fa-trash-alt"></i> Borrar todo
-                                </button>
+                        </div>
+                        <div class="settings-grid">
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-download"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Exportar Datos</h3>
+                                        <p>Descarga tus playlists y configuraciones</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <button id="exportDataBtn" class="modern-btn primary">
+                                        <i class="fas fa-file-export"></i>
+                                        <span>Exportar</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-upload"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Importar Datos</h3>
+                                        <p>Carga tus playlists y configuraciones desde un archivo</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="import-container">
+                                        <input type="file" id="importDataInput" accept=".json" class="file-input">
+                                        <button id="importDataBtn" class="modern-btn secondary">
+                                            <i class="fas fa-file-import"></i>
+                                            <span>Importar</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card" id="statsCard">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-chart-pie"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Estadísticas de Uso</h3>
+                                        <p>Ve tus estadísticas de escucha y actividad</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control" id="statsContent">
+                                    <!-- El contenido se cargará dinámicamente -->
+                                </div>
+                            </div>
+
+                            <div class="setting-card danger-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Restablecer Aplicación</h3>
+                                        <p>Elimina todas las playlists, canciones recientes y configuraciones</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <button id="deleteAllDataBtn" class="modern-btn danger">
+                                        <i class="fas fa-exclamation-triangle"></i>
+                                        <span>Borrar Todo</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Settings Section -->
+                    <div class="settings-section" id="advancedSection">
+                        <div class="settings-section-header">
+                            <div class="settings-section-title">
+                                <h2><i class="fas fa-cog"></i> Configuración Avanzada</h2>
+                                <span class="settings-section-description">Opciones avanzadas para usuarios expertos</span>
+                            </div>
+                        </div>
+                        <div class="settings-grid">
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-code"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Modo Desarrollador</h3>
+                                        <p>Habilita herramientas de desarrollo y debugging</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="developerModeToggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                    <span id="developerModeStatus" class="setting-status">Desactivado</span>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-memory"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Cache de Audio</h3>
+                                        <p>Almacena canciones en caché para reproducción offline</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <label class="modern-switch">
+                                        <input type="checkbox" id="audioCacheToggle">
+                                        <span class="switch-slider"></span>
+                                    </label>
+                                    <div class="setting-inline-meta">
+                                        <span id="audioCacheStatus" class="setting-status">Caché desactivada</span>
+                                    </div>
+                                    <button id="clearAudioCacheBtn" class="modern-btn danger" style="margin-top: 0.75rem;">
+                                        <i class="fas fa-trash"></i>
+                                        <span>Vaciar caché</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="setting-card cache-library-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-folder-open"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Biblioteca de Caché</h3>
+                                        <p>Revisa qué canciones quedaron guardadas para uso offline</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <div class="setting-inline-meta">
+                                        <span id="audioCacheCount" class="setting-status">Cargando caché...</span>
+                                    </div>
+                                    <div id="audioCacheLibrary" class="audio-cache-library"></div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-network-wired"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Calidad de Streaming</h3>
+                                        <p>Selecciona la calidad de audio para streaming</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="streamingQualitySelect" class="modern-select">
+                                        <option value="low">Baja (128kbps)</option>
+                                        <option value="medium" selected>Media (256kbps)</option>
+                                        <option value="high">Alta (320kbps)</option>
+                                        <option value="lossless">Sin Pérdida (FLAC)</option>
+                                    </select>
+                                    <div class="setting-inline-meta">
+                                        <span id="streamingQualityHint" class="setting-status">Equilibrio entre calidad y velocidad</span>
+                                        <span id="streamingQualityStatus" class="setting-status">Aun no hay reproduccion para medir</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card developer-tools-card" id="developerToolsCard" style="display: none;">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-flask"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Herramientas de Desarrollo</h3>
+                                        <p>Utilidades para probar streaming, caché y diagnóstico</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control developer-tools-grid">
+                                    <div class="developer-tool-item">
+                                        <div>
+                                            <strong>Acceso a Internet</strong>
+                                            <p>Activa o corta llamadas de red para probar caché y modo offline</p>
+                                        </div>
+                                        <label class="modern-switch">
+                                            <input type="checkbox" id="internetAccessToggle">
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="developer-tool-item">
+                                        <div>
+                                            <strong>Logs del reproductor</strong>
+                                            <p>Muestra más mensajes de depuración en consola</p>
+                                        </div>
+                                        <label class="modern-switch">
+                                            <input type="checkbox" id="verbosePlayerLogsToggle">
+                                            <span class="switch-slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="developer-tool-item">
+                                        <div>
+                                            <strong>Motor de extracción de audio</strong>
+                                            <p>Si un motor falla por cambios de YouTube, podés cambiar temporalmente al otro.</p>
+                                        </div>
+                                        <select id="audioExtractorSelect" class="modern-select">
+                                            <option value="auto" selected>Automático recomendado</option>
+                                            <option value="yt-dlp">yt-dlp</option>
+                                            <option value="ytdl-core">ytdl-core</option>
+                                        </select>
+                                    </div>
+                                    <div class="developer-tool-actions">
+                                        <button id="devTestNotificationBtn" class="modern-btn secondary" type="button">
+                                            <i class="fas fa-bell"></i>
+                                            <span>Probar Notificaciones</span>
+                                        </button>
+                                        <button id="openDevToolsBtn" class="modern-btn secondary" type="button">
+                                            <i class="fas fa-terminal"></i>
+                                            <span>Abrir DevTools</span>
+                                        </button>
+                                        <button id="copyDiagnosticsBtn" class="modern-btn primary" type="button">
+                                            <i class="fas fa-notes-medical"></i>
+                                            <span>Copiar Diagnóstico</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-award"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Créditos</h3>
+                                        <p>Muestra los créditos especiales de Lunera</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <button id="creditsBtn" class="modern-btn secondary" type="button">
+                                        <i class="fas fa-heart"></i>
+                                        <span>Creditos</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-keyboard"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Atajos de Teclado</h3>
+                                        <p>Configura atajos de teclado personalizados</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <button id="keyboardShortcutsBtn" class="modern-btn secondary">
+                                        <i class="fas fa-keyboard"></i>
+                                        <span>Configurar</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="setting-card">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-language"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Idioma de la Interfaz</h3>
+                                        <p>Cambia el idioma de la aplicación</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control">
+                                    <select id="languageSelect" class="modern-select">
+                                        <option value="es" selected>Español</option>
+                                        <option value="en">English</option>
+                                        <option value="fr">Français</option>
+                                        <option value="de">Deutsch</option>
+                                        <option value="it">Italiano</option>
+                                        <option value="pt">Português</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="setting-card" id="appInfoCard">
+                                <div class="setting-card-header">
+                                    <div class="setting-icon">
+                                        <i class="fas fa-info-circle"></i>
+                                    </div>
+                                    <div class="setting-info">
+                                        <h3>Información de la Aplicación</h3>
+                                        <p>Versión, licencia y detalles técnicos</p>
+                                    </div>
+                                </div>
+                                <div class="setting-control" id="appInfoContent">
+                                    <!-- El contenido se cargarán dinámicamente -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -450,57 +1482,103 @@
         </main>
 
         <!-- Barra de reproducción -->
-        <div class="now-playing-bar">
-            <div class="track-info">
-                <img src="assets/default-track.png" id="currentTrackImg" class="track-image" alt="Track">
-                <div class="track-details">
-                    <span id="currentTrackTitle" class="track-title">No hay canción seleccionada</span>
-                    <span id="currentTrackArtist" class="track-artist">-</span>
-                </div>
-                <button class="like-button" id="likeButton">
-                    <i class="far fa-heart"></i>
-                </button>
-            </div>
-
-            <div class="player-controls">
-                <div class="control-buttons">
-                    <button class="control-button" id="shuffleButton">
-                        <i class="fas fa-random"></i>
-                    </button>
-                    <button class="control-button" id="previousButton">
-                        <i class="fas fa-step-backward"></i>
-                    </button>
-                    <button class="control-button play-button" id="playPauseButton">
-                        <i class="fas fa-play"></i>
-                    </button>
-                    <button class="control-button" id="nextButton">
-                        <i class="fas fa-step-forward"></i>
-                    </button>
-                    <button class="control-button" id="repeatButton">
-                        <i class="fas fa-redo"></i>
-                    </button>
-                </div>
-                <div class="progress-container">
-                    <span id="currentTime">0:00</span>
-                    <div class="progress-bar">
-                        <div class="progress" id="progressBar"></div>
+        <div class="now-playing-bar is-empty" data-player-state="empty">
+            <div class="now-playing-shell">
+                <section class="track-info now-track-panel" aria-live="polite">
+                    <div class="track-art-shell">
+                        <span class="track-art-glow" aria-hidden="true"></span>
+                        <img id="currentTrackImg" class="track-image" alt="Portada de la canción" hidden>
+                        <div id="emptyTrackArt" class="track-empty-art" aria-hidden="true">
+                            <span class="empty-art-ring ring-a"></span>
+                            <span class="empty-art-ring ring-b"></span>
+                            <span class="empty-art-core">
+                                <span></span>
+                            </span>
+                            <span class="empty-art-bars">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </span>
+                        </div>
+                        <span class="track-art-sheen" aria-hidden="true"></span>
                     </div>
-                    <span id="totalTime">0:00</span>
-                </div>
-            </div>
+                    <div class="track-details">
+                        <div class="now-status-line">
+                            <span class="now-status-dot" aria-hidden="true"></span>
+                            <span id="nowPlayingStatus" class="now-status-text">Sin pista cargada</span>
+                            <span class="now-levels" aria-hidden="true">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </span>
+                        </div>
+                        <span id="currentTrackTitle" class="track-title" title="No hay canción seleccionada">No hay canción seleccionada</span>
+                        <span id="currentTrackArtist" class="track-artist" title="-">-</span>
+                    </div>
+                </section>
 
-            <div class="volume-controls">
-                <button class="control-button" id="volumeButton">
-                    <i class="fas fa-volume-up"></i>
-                </button>
-                <div class="volume-bar">
-                    <div class="volume-progress" id="volumeProgress"></div>
-                </div>
+                <section class="player-controls now-transport-panel" aria-label="Controles de reproducción">
+                    <div class="control-buttons">
+                        <button class="control-button secondary-control" id="shuffleButton" title="Aleatorio" aria-label="Aleatorio">
+                            <i class="fas fa-random"></i>
+                        </button>
+                        <button class="control-button secondary-control" id="previousButton" title="Anterior" aria-label="Anterior">
+                            <i class="fas fa-step-backward"></i>
+                        </button>
+                        <button class="control-button play-button" id="playPauseButton" title="Reproducir" aria-label="Reproducir">
+                            <i class="fas fa-play"></i>
+                        </button>
+                        <button class="control-button secondary-control" id="nextButton" title="Siguiente" aria-label="Siguiente">
+                            <i class="fas fa-step-forward"></i>
+                        </button>
+                        <button class="control-button secondary-control" id="repeatButton" title="No repetir" aria-label="Repetición">
+                            <i class="fas fa-redo"></i>
+                        </button>
+                    </div>
+
+                    <div class="progress-container" aria-label="Progreso de reproducción">
+                        <span id="currentTime" class="time-chip">0:00</span>
+                        <div class="progress-bar" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Progreso">
+                            <div class="progress-rail-glow" aria-hidden="true"></div>
+                            <div class="progress" id="progressBar"></div>
+                        </div>
+                        <span id="totalTime" class="time-chip">0:00</span>
+                    </div>
+                </section>
+
+                <section class="now-actions-panel" aria-label="Acciones de reproducción">
+                    <div class="now-action-buttons">
+                        <button class="control-button action-button" id="lyricsButton" title="Ver letra" aria-label="Ver letra">
+                            <i class="fas fa-microphone-alt"></i>
+                        </button>
+                        <button class="control-button action-button" id="miniPlayerButton" title="Abrir mini reproductor" aria-label="Abrir mini reproductor" aria-pressed="false">
+                            <i class="fas fa-window-restore"></i>
+                        </button>
+                        <button class="control-button action-button" id="nowPlayingQueueButton" title="Mostrar cola" aria-label="Mostrar cola">
+                            <i class="fas fa-list-ul"></i>
+                            <span class="action-count" id="nowPlayingQueueCount">0</span>
+                        </button>
+                    </div>
+                    <div class="volume-controls">
+                        <button class="control-button volume-button" id="volumeButton" title="Silenciar" aria-label="Silenciar">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                        <div class="volume-bar" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100" aria-label="Volumen">
+                            <div class="volume-progress" id="volumeProgress"></div>
+                        </div>
+                        <span id="volumeValue" class="volume-value">100%</span>
+                    </div>
+                </section>
             </div>
         </div>
         <div class="queue-container">
             <div class="queue-header">
+                <div class="queue-heading">
+                    <span class="queue-kicker">Siguiente sesión</span>
                 <span class="queue-title">Cola de reproducción</span>
+                </div>
                 <div class="queue-controls">
                     <button class="queue-control-button" id="queueLoopButton" title="Reproducir en bucle">
                         <i class="fas fa-repeat"></i>
@@ -510,16 +1588,46 @@
                     </button>
                 </div>
             </div>
+            <div class="queue-summary">
+                <span class="queue-count" id="queueCount">0 canciones</span>
+                <span class="queue-hint" id="queueHint">Añade temas para verlos aquí</span>
+            </div>
             <div class="queue-items">
                 <!-- Los items de la cola se agregarán dinámicamente aquí -->
             </div>
         </div>
+        <div id="lyricsModal" class="lyrics-modal" aria-hidden="true">
+            <div class="lyrics-modal-backdrop" id="lyricsModalBackdrop"></div>
+            <div class="lyrics-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="lyricsModalTitle">
+                <div class="lyrics-modal-header">
+                    <div class="lyrics-modal-heading">
+                        <span class="lyrics-modal-kicker">Letra actual</span>
+                        <h3 id="lyricsModalTitle">No hay canción seleccionada</h3>
+                        <p id="lyricsModalArtist" class="lyrics-modal-artist">-</p>
+                    </div>
+                    <button class="lyrics-close-button" id="closeLyricsButton" aria-label="Cerrar letras">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div id="lyricsContent" class="lyrics-modal-content">
+                    Selecciona una canción para ver su letra.
+                </div>
+            </div>
+        </div>
+    </div>
 
         <!-- Audio element (oculto) -->
         <audio id="audioPlayer"></audio>
     </div>
 
+    <!-- Espectrograma Visual -->
+    <div id="spectrogram" class="spectrogram-container" style="display: none;">
+        <canvas id="spectrogramCanvas" class="spectrogram-canvas"></canvas>
+    </div>
+
+    <script src="csp-config.js"></script>
+    <script src="notification-system.js"></script>
     <script src="background.js"></script>
     <script src="renderer.js"></script>
-</body>
+    </body>
 </html>
