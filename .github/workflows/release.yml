@@ -2,13 +2,17 @@ name: Windows release
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: windows-release-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
   cancel-in-progress: false
 
 jobs:
@@ -20,17 +24,58 @@ jobs:
         with:
           node-version: '22'
           cache: npm
-      - name: Validate version
+      - name: Prepare release
+        id: prepare
         shell: pwsh
-        run: |
-          $version = node -p "require('./package.json').version"
-          if ($env:GITHUB_REF_NAME -cne "v$version") { throw 'El tag debe coincidir con package.json' }
-      - run: npm ci
-      - run: npm test
-      - name: Build and upload draft release
-        run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Este canal requiere una versión estable X.Y.Z' }
+          $tag = "v$version"
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -cne $tag) { throw 'El tag debe coincidir con package.json' }
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          $publish = $env:GITHUB_EVENT_NAME -ne 'pull_request'
+          if ($publish) {
+            $releases = gh release list --repo $env:GITHUB_REPOSITORY --limit 1000 --json tagName,isDraft | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0) { throw 'No se pudieron consultar las releases' }
+            $existing = $releases | Where-Object { $_.tagName -ceq $tag }
+            if ($existing -and -not $existing.isDraft) {
+              Write-Host "La release $tag ya está publicada. Incrementa version para publicar otra."
+              $publish = $false
+            }
+            "exists=$([bool]$existing)".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+          }
+          "publish=$publish".ToLowerInvariant() >> $env:GITHUB_OUTPUT
+      - run: npm ci
+      - run: npm test
+      - name: Build installer and update metadata
+        run: npm run build
+      - name: Create draft release
+        if: steps.prepare.outputs.publish == 'true' && steps.prepare.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title "Lunera $env:RELEASE_TAG" --generate-notes --draft
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudo crear la release' }
+      - name: Upload assets and publish release
+        if: steps.prepare.outputs.publish == 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ steps.prepare.outputs.tag }}
+        run: |
+          if (-not (Test-Path dist/latest.yml)) { throw 'Falta latest.yml' }
+          $installers = @(Get-ChildItem dist/*.exe)
+          $blockmaps = @(Get-ChildItem dist/*.blockmap)
+          if ($installers.Count -eq 0 -or $blockmaps.Count -eq 0) { throw 'Falta el instalador o el blockmap' }
+          $assets = @($installers.FullName) + @($blockmaps.FullName) + @('dist/latest.yml')
+          gh release upload $env:RELEASE_TAG @assets --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudieron subir los archivos' }
+          gh release edit $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --draft=false --prerelease=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudo publicar la release' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
