@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, nativeImage, session, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, session, screen, dialog } = require('electron');
+const { startAppUpdater } = require('./services/appUpdater');
 const usetube = require('usetube');
 const Store = require('electron-store');
 const path = require('path');
@@ -2349,6 +2350,7 @@ app.whenReady().then(async () => {
   await startAudioProxyServer();
   migrateUserData();
   createWindow();
+  startAppUpdater({ app, dialog, getWindow: () => mainWindow, isNetworkEnabled: () => networkAccessEnabled });
 });
 
 app.on('before-quit', () => {

@@ -5,10 +5,11 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "build": "npm run obfuscate && electron-builder --win && npm run restore",
+    "build": "node scripts/build.js --publish never",
     "obfuscate": "node obfuscate.js",
     "restore": "node restore.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test tests/appUpdater.test.js",
+    "release": "node scripts/build.js --publish always"
   },
   "keywords": [],
   "author": "",
@@ -46,7 +47,12 @@
       "**/*",
       "!node_modules/.bin",
       "!node_modules/electron",
-      "!node_modules/electron-builder"
+      "!node_modules/electron-builder",
+      "!backup/**/*",
+      "!tests/**/*",
+      "!scripts/**/*",
+      "!.github/**/*",
+      "!userData*.json"
     ],
     "asar": true,
     "asarUnpack": [
@@ -75,10 +81,22 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "artifactName": "Lunera Beta Setup.${ext}",
+      "artifactName": "Lunera-Setup-${version}.${ext}",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "runAfterFinish": true
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "iTheRoken",
+        "repo": "RokMusic",
+        "releaseType": "draft"
+      }
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iTheRoken/RokMusic.git"
   }
 }
