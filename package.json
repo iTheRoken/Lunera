@@ -1,6 +1,6 @@
 {
   "name": "lunera",
-  "version": "1.9.0",
+  "version": "v1.9.0",
   "description": "Reproductor de música",
   "main": "main.js",
   "scripts": {
