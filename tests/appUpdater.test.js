@@ -4,7 +4,18 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
 
-function setup(packaged = true, online = true, response = 1) {
+function createMainWindow() {
+  const sent = [];
+  return {
+    sent,
+    isDestroyed: () => false,
+    webContents: {
+      send: (...args) => sent.push(args)
+    }
+  };
+}
+
+function setup({ packaged = true, online = true, window = createMainWindow() } = {}) {
   const updater = new EventEmitter();
   let checks = 0;
   let installs = 0;
@@ -22,17 +33,32 @@ function setup(packaged = true, online = true, response = 1) {
   vm.runInNewContext(fs.readFileSync(require.resolve('../services/appUpdater'), 'utf8'), context);
   const app = new EventEmitter();
   app.isPackaged = packaged;
-  context.module.exports.startAppUpdater({ app, updater,
-    dialog: { showMessageBox: async () => ({ response }) },
-    getWindow: () => null, isNetworkEnabled: () => online });
-  return { updater, app, timers, cleared, checks: () => checks, installs: () => installs };
+  const controller = context.module.exports.startAppUpdater({
+    app,
+    updater,
+    getWindow: () => window,
+    isNetworkEnabled: () => online
+  });
+  return {
+    updater,
+    app,
+    controller,
+    sent: window.sent,
+    timers,
+    cleared,
+    checks: () => checks,
+    installs: () => installs
+  };
 }
 
 test('development does not start update checks', () => {
-  assert.equal(setup(false).timers.length, 0);
+  const state = setup({ packaged: false });
+  assert.equal(state.timers.length, 0);
+  assert.equal(state.controller.getStatus(), null);
+  assert.equal(state.controller.install(), false);
 });
 test('offline mode skips checks', async () => {
-  const state = setup(true, false);
+  const state = setup({ online: false });
   await state.timers[0]();
   assert.equal(state.checks(), 0);
 });
@@ -47,13 +73,32 @@ test('checks automatically and clears timers on quit', async () => {
   assert.equal(state.checks(), 1);
   assert.equal(state.cleared.length, 2);
 });
-test('restart happens only when selected', async () => {
-  for (const response of [0, 1]) {
-    const state = setup(true, true, response);
-    state.updater.emit('update-downloaded', { version: '1.3.0' });
-    await new Promise(setImmediate);
-    assert.equal(state.installs(), response === 0 ? 1 : 0);
-  }
+test('downloaded update notifies the main window and installs only on request', async () => {
+  const state = setup();
+
+  assert.equal(state.controller.install(), false);
+  assert.equal(state.installs(), 0);
+
+  state.updater.emit('update-downloaded', {
+    version: '1.3.0',
+    releaseName: 'Novedades de Lunera',
+    releaseNotes: [{ note: 'Mejoras de estabilidad y rendimiento.' }]
+  });
+  await new Promise(setImmediate);
+
+  const status = state.controller.getStatus();
+  assert.equal(status.version, '1.3.0');
+  assert.equal(status.releaseName, 'Novedades de Lunera');
+  assert.equal(status.releaseNotes, 'Mejoras de estabilidad y rendimiento.');
+  assert.equal(state.sent.length, 1);
+  assert.equal(state.sent[0][0], 'app-update:ready');
+  assert.equal(state.sent[0][1].version, '1.3.0');
+  assert.equal(state.installs(), 0);
+
+  assert.equal(state.controller.install(), true);
+  assert.equal(state.installs(), 1);
+  assert.equal(state.controller.install(), false);
+  assert.equal(state.installs(), 1);
 });
 test('download/check errors do not crash the application', async () => {
   const state = setup();

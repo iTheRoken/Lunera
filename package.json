@@ -1,6 +1,6 @@
 {
   "name": "lunera",
-  "version": "1.9.0",
+  "version": "2.0.0",
   "description": "Reproductor de música",
   "main": "main.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "build": "node scripts/build.js --publish never",
     "obfuscate": "node obfuscate.js",
     "restore": "node restore.js",
-    "test": "node --test tests/appUpdater.test.js",
+    "test": "node --test tests/*.test.js",
     "release": "node scripts/build.js --publish always"
   },
   "keywords": [],
@@ -49,6 +49,7 @@
       "!node_modules/electron",
       "!node_modules/electron-builder",
       "!backup/**/*",
+      "!Lunera Mobile/**/*",
       "!tests/**/*",
       "!scripts/**/*",
       "!.github/**/*",
@@ -56,12 +57,6 @@
     ],
     "asar": true,
     "asarUnpack": [
-      "node_modules/@distube/ytdl-core/**/*",
-      "node_modules/usetube/**/*",
-      "node_modules/yt-dlp-exec/**/*",
-      "node_modules/ffmpeg-static/**/*"
-    ],
-    "extraResources": [
       "node_modules/@distube/ytdl-core/**/*",
       "node_modules/usetube/**/*",
       "node_modules/yt-dlp-exec/**/*",
@@ -76,9 +71,11 @@
           ]
         }
       ],
-      "icon": "assets/logo2.png"
+      "icon": "assets/branding/lunera.ico"
     },
     "nsis": {
+      "installerIcon": "assets/branding/lunera.ico",
+      "uninstallerIcon": "assets/branding/lunera.ico",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "artifactName": "Lunera-Setup-${version}.${ext}",
@@ -90,13 +87,13 @@
       {
         "provider": "github",
         "owner": "iTheRoken",
-        "repo": "RokMusic",
+        "repo": "Lunera",
         "releaseType": "draft"
       }
     ]
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/iTheRoken/RokMusic.git"
+    "url": "https://github.com/iTheRoken/Lunera.git"
   }
 }

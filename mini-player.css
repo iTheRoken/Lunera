@@ -471,6 +471,90 @@ input {
   pointer-events: none;
 }
 
+.mini-halloween-decor {
+  display: none;
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+body[data-interface-mode="halloween"] {
+  --accent: #ff8a1e;
+  --accent-rgb: 255, 138, 30;
+}
+
+body[data-interface-mode="halloween"] .mini-shell {
+  border-color: rgba(255, 161, 48, 0.4);
+  background:
+    radial-gradient(circle at 85% 0%, rgba(160, 69, 191, 0.34), transparent 36%),
+    linear-gradient(145deg, rgba(48, 18, 57, 0.92), rgba(18, 8, 26, 0.92));
+}
+
+body[data-interface-mode="halloween"] .mini-halloween-decor { display: block; }
+
+.mini-halloween-decor::before {
+  position: absolute;
+  top: -19px;
+  right: 11px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: #ffd56d;
+  box-shadow: 0 0 22px rgba(255, 194, 72, 0.62);
+  content: '';
+}
+
+.mini-halloween-decor::after {
+  position: absolute;
+  top: -25px;
+  right: -3px;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background: #28102d;
+  content: '';
+}
+
+.mini-halloween-decor span {
+  position: absolute;
+  top: 24px;
+  right: 68px;
+  width: 18px;
+  height: 7px;
+  border-radius: 80% 14% 55% 20%;
+  background: #261029;
+  transform: rotate(-11deg);
+}
+
+.mini-halloween-decor span::after {
+  position: absolute;
+  top: -2px;
+  right: -10px;
+  width: 18px;
+  height: 7px;
+  border-radius: 14% 80% 20% 55%;
+  background: inherit;
+  content: '';
+  transform: rotate(22deg);
+}
+
+.mini-halloween-decor i,
+.mini-halloween-decor b {
+  position: absolute;
+  bottom: -10px;
+  width: 29px;
+  height: 24px;
+  border: 1px solid rgba(112, 48, 14, 0.75);
+  border-radius: 48% 48% 43% 43%;
+  background: linear-gradient(90deg, #e56812, #ffb139, #d95c10);
+  box-shadow: 0 4px 11px rgba(0, 0, 0, 0.26);
+}
+
+.mini-halloween-decor i { left: 12px; }
+.mini-halloween-decor b { right: 23px; transform: scale(0.72); transform-origin: bottom; }
+
 @media (max-width: 340px), (max-height: 205px) {
   .always-on-top,
   .app-chip span {

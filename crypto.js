@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 
 const algorithm = 'aes-256-ctr';
-const secretKey = crypto.createHash('sha256').update('rokMusicSecret').digest('hex').slice(0, 32);
+const secretKey = crypto.createHash('sha256').update('LuneraSecret').digest('hex').slice(0, 32);
 const iv = crypto.randomBytes(16);
 
 function encrypt(text) {

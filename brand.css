@@ -1,0 +1,88 @@
+/* The mobile moon is the shared Lunera identity. */
+.loading-screen.lunar-loading {
+  --moon-mint: #a0e8c4;
+  isolation: isolate;
+  overflow: hidden;
+  background: #0c1111;
+  opacity: 1;
+  transform: none;
+  transition: opacity 450ms ease, transform 600ms cubic-bezier(.16,1,.3,1), visibility 450ms;
+}
+.lunar-loading::before,.lunar-loading::after { content: none; animation: none; }
+.lunar-loading .lunar-halo {
+  position: absolute; width: min(740px,90vw); aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(ellipse, #a0e8c40e, #a0e8c404 40%, transparent 68%);
+  animation: lunarHalo 1800ms ease-out both;
+}
+.lunar-intro { display: flex; align-items: center; justify-content: center; gap: clamp(20px,3.2vw,44px); position: relative; padding: 20px; }
+.lunar-mark { width: clamp(74px,10vw,128px); aspect-ratio: 1; position: relative; flex-shrink: 0; animation: lunarArrive 1100ms cubic-bezier(.16,1,.3,1) both; }
+.lunar-mark svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 0 18px #a0e8c420); }
+.lunar-mark path { fill: none; stroke: var(--moon-mint); stroke-width: 1.85; stroke-linecap: round; stroke-linejoin: round; }
+.lunar-mark-ghost { opacity: .07; }
+.lunar-mark-stroke { stroke-dasharray: 100; stroke-dashoffset: 100; animation: lunarTrace 1150ms 80ms cubic-bezier(.4,0,.2,1) forwards; }
+.lunar-wordmask { overflow: hidden; padding: 12px 4px 18px; }
+.lunar-word {
+  margin: 0; font-family: Inter, 'Segoe UI Variable', 'Segoe UI', Arial, sans-serif;
+  font-size: clamp(54px,8vw,104px); font-weight: 750; line-height: 1.12; letter-spacing: -.065em;
+  color: #f2f4ef; text-shadow: none; -webkit-font-smoothing: antialiased;
+  animation: lunarWord 850ms 520ms cubic-bezier(.16,1,.3,1) both;
+}
+.lunar-dot { display: inline-block; color: var(--moon-mint); margin-left: .08em; transform-origin: 50% 80%; animation: lunarDot 700ms 1000ms cubic-bezier(.16,1,.3,1) both; }
+.lunar-glint { position: absolute; top: 12%; right: 18%; width: 5px; height: 5px; border-radius: 50%; background: #e8fff1; box-shadow: 0 0 14px 3px #a0e8c455; animation: lunarGlint 650ms 1050ms both; }
+.lunar-caption { position: absolute; top: calc(50% + 110px); margin: 0; color: #82958d; font: 500 10px/1.5 Inter,'Segoe UI',sans-serif; letter-spacing: .23em; text-transform: uppercase; animation: lunarWord 800ms 1050ms both; }
+.lunar-loading.is-exiting { opacity: 0; transform: scale(1.025); visibility: hidden; pointer-events: none; }
+@keyframes lunarTrace { to { stroke-dashoffset: 0; } }
+@keyframes lunarArrive { from { opacity: 0; transform: translateY(10px) rotate(-14deg) scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes lunarWord { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes lunarDot { 0% { opacity: 0; transform: scale(.15); } 65% { opacity: 1; transform: scale(1.15); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes lunarGlint { 0%,100% { opacity: 0; transform: scale(.5); } 40% { opacity: .9; transform: scale(1); } }
+@keyframes lunarHalo { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .lunar-loading * { animation: none !important; }
+  .lunar-mark-stroke { stroke-dashoffset: 0; }
+  .lunar-glint { display: none; }
+  .loading-screen.lunar-loading { transition: none; }
+}
+body.settings-reduce-motion .lunar-loading *,body[data-settings-animation="reduced"] .lunar-loading * { animation: none !important; }
+body.settings-reduce-motion .lunar-mark-stroke,body[data-settings-animation="reduced"] .lunar-mark-stroke { stroke-dashoffset: 0; }
+@media (max-width: 600px) { .lunar-caption { top: calc(50% + 88px); font-size: 8px; } }
+
+/* Shared moon wordmark: a quiet, unframed signature in every interface. */
+body .sidebar.sidebar-luxe .sidebar-brand.lunar-brand {
+  min-height: 88px; padding: 16px 12px; gap: 12px;
+  border: 1px solid #a0e8c414; border-radius: 18px;
+  background: linear-gradient(125deg, #a0e8c40a, #10161655 75%);
+  box-shadow: inset 0 1px #ffffff05; overflow: hidden;
+  animation: lunarBrandReveal 700ms cubic-bezier(.16,1,.3,1) both;
+}
+body .sidebar.sidebar-luxe .lunar-brand::before,
+body .sidebar.sidebar-luxe .lunar-brand::after { content: none; }
+body .sidebar.sidebar-luxe .lunar-brand .brand-icon {
+  display: grid; place-items: center; width: 48px; height: 54px; flex: 0 0 48px;
+  border: 0; border-radius: 0; background: transparent; box-shadow: none;
+  overflow: visible; animation: none;
+}
+body .sidebar.sidebar-luxe .lunar-brand .brand-icon img {
+  width: 58px; height: 58px; max-width: none; object-fit: contain;
+  filter: drop-shadow(0 0 10px #a0e8c41a); transition: transform 500ms cubic-bezier(.16,1,.3,1);
+}
+body .sidebar.sidebar-luxe .lunar-brand .brand-meta { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+body .sidebar.sidebar-luxe .lunar-brand .brand-title {
+  margin: 0; color: #f2f4ef; font-family: Inter,'Segoe UI Variable','Segoe UI',sans-serif;
+  font-size: 27px; font-weight: 750; letter-spacing: -.065em; line-height: 1.1; white-space: nowrap;
+}
+.lunar-brand .brand-wordmark-dot { color: #a0e8c4; margin-left: .06em; }
+body .sidebar.sidebar-luxe .lunar-brand .brand-tag {
+  margin: 0; padding: 0; border: 0; background: none; border-radius: 0;
+  color: #8b9b94; font-size: 10px; font-weight: 550; letter-spacing: .1em; line-height: 1.2;
+}
+@media (hover: hover) { .lunar-brand:hover .brand-icon img { transform: rotate(-7deg); } }
+@keyframes lunarBrandReveal { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  body .sidebar.sidebar-luxe .sidebar-brand.lunar-brand { animation: none; }
+  body .sidebar.sidebar-luxe .lunar-brand .brand-icon img { transition: none; transform: none; }
+}
+body.settings-reduce-motion .sidebar.sidebar-luxe .sidebar-brand.lunar-brand,
+body[data-settings-animation="reduced"] .sidebar.sidebar-luxe .sidebar-brand.lunar-brand { animation: none; }
+body.settings-reduce-motion .sidebar.sidebar-luxe .lunar-brand .brand-icon img,
+body[data-settings-animation="reduced"] .sidebar.sidebar-luxe .lunar-brand .brand-icon img { transition: none; transform: none; }

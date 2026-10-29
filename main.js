@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, nativeImage, session, screen, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeImage, session, screen } = require('electron');
 const { startAppUpdater } = require('./services/appUpdater');
+const { createGameOverlay } = require('./services/gameOverlay');
 const usetube = require('usetube');
 const Store = require('electron-store');
 const path = require('path');
@@ -7,6 +8,7 @@ const fs = require('fs');
 const http = require('http');
 const https = require('https');
 const crypto = require('crypto');
+const net = require('net');
 const sqlite3 = require('sqlite3').verbose();
 const lyricGet = require('lyric-get');
 const {
@@ -14,8 +16,23 @@ const {
   getPlaylist: extractPlaylist,
   getVideoId,
   normalizeExtractorMode,
-  validateMediaUrl
+  validateMediaUrl,
+  configureLseEngine,
+  configureTurboEngine
 } = require('./services/audioExtractor');
+const {
+  LuneraStreamEngine,
+  DEFAULT_LSE_SETTINGS,
+  normalizeSettings: normalizeLseSettings
+} = require('./services/lse');
+const {
+  LuneraTurboEngine,
+  DEFAULT_TURBO_SETTINGS,
+  normalizeTurboSettings,
+  BenchmarkRunner
+} = require('./services/lte');
+const ytdlpService = require('./services/ytdlpService');
+const { isBlockedHostname, isUnsafeIp } = require('./services/lse/core/NetworkManager');
 
 const store = new Store();
 const dbPath = path.join(app.getPath('userData'), 'music_database.db');
@@ -28,8 +45,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
 });
 
 let mainWindow;
+let appUpdaterController = null;
 let miniPlayerWindow = null;
 let miniPlayerBoundsTimer = null;
+let gameOverlay = null;
 let latestPlayerState = {
   isPlaying: false,
   playerUiState: 'empty',
@@ -45,19 +64,275 @@ let latestPlayerState = {
 let currentStream = null;
 let thumbarPlaying = false;
 let networkAccessEnabled = store.get('networkAccessEnabled', true);
-let audioExtractorPreference = normalizeExtractorMode(store.get('audioExtractor', 'auto'));
+const storedAudioExtractor = store.get('audioExtractor');
+const hasExplicitAudioExtractor = ['lte', 'lse', 'yt-dlp', 'ytdl-core'].includes(storedAudioExtractor);
+let audioExtractorPreference = normalizeExtractorMode(
+  hasExplicitAudioExtractor ? storedAudioExtractor : 'lte'
+);
+if (storedAudioExtractor !== audioExtractorPreference) {
+  store.set('audioExtractor', audioExtractorPreference);
+}
+let lseEngine = null;
+let turboEngine = null;
 let audioProxyServer = null;
 let audioProxyPort = null;
 const audioProxyEntries = new Map();
 const audioCacheJobs = new Map();
 const memoryStreamCache = new Map();
 const memoryStreamPreloadJobs = new Map();
+let activePlaybackResolution = null;
+let activeTurboBenchmark = null;
+let lastTurboBenchmark = null;
 const AUDIO_PROXY_HOST = '127.0.0.1';
 const AUDIO_PROXY_TTL_MS = 2 * 60 * 60 * 1000;
 const MEMORY_STREAM_TTL_MS = 10 * 60 * 1000;
+const AUDIO_CACHE_DIRECTORY_NAME = 'audio_cache';
+const AUDIO_CACHE_EXTENSIONS = Object.freeze(['m4a', 'mp4', 'mp3', 'webm', 'ogg', 'aac', 'wav', 'flac']);
+const LEGACY_USER_DATA_MIGRATION_KEY = 'legacyUserDataMigrationComplete';
+let audioCacheGeneration = 0;
+let audioCacheClearPromise = null;
+let applicationDataGeneration = 0;
+
+function cancelActivePlaybackResolution(reason = 'Se seleccionó otra pista') {
+  const active = activePlaybackResolution;
+  if (!active) return false;
+  activePlaybackResolution = null;
+  try { active.controller.abort(reason); } catch (error) {}
+  return true;
+}
+
+function createPlaybackAbortError(reason = 'La preparacion de audio fue cancelada') {
+  const error = new Error(reason);
+  error.name = 'AbortError';
+  error.code = 'ABORTED';
+  return error;
+}
+
+function throwIfPlaybackAborted(signal) {
+  if (signal?.aborted) {
+    const reason = typeof signal.reason === 'string' && signal.reason.trim()
+      ? signal.reason
+      : 'La preparacion de audio fue cancelada';
+    throw createPlaybackAbortError(reason);
+  }
+}
+
+function beginPlaybackResolution(requestId, videoUrl, quality, mode) {
+  cancelActivePlaybackResolution();
+  const controller = new AbortController();
+  activePlaybackResolution = { requestId, videoUrl, quality, mode, controller };
+  return controller;
+}
+
+function finishPlaybackResolution(requestId) {
+  if (activePlaybackResolution?.requestId === requestId) {
+    activePlaybackResolution = null;
+  }
+}
 function ensureInternetAccess(featureName) {
   if (!networkAccessEnabled) {
     throw new Error(`${featureName} no está disponible porque el acceso a internet está desactivado`);
+  }
+}
+
+function initializeLseEngine() {
+  const persisted = normalizeLseSettings(store.get('lseSettings', {}), DEFAULT_LSE_SETTINGS);
+  store.set('lseSettings', persisted);
+
+  lseEngine = new LuneraStreamEngine({
+    settings: persisted,
+    metadataCachePath: path.join(app.getPath('userData'), 'lse_metadata_cache.json')
+  });
+  const extractorStates = store.get('lseExtractorStates', {});
+  if (extractorStates && typeof extractorStates === 'object') {
+    for (const [id, enabled] of Object.entries(extractorStates)) {
+      try { lseEngine.setExtractorEnabled(id, enabled !== false); } catch (error) {}
+    }
+  }
+  configureLseEngine(lseEngine);
+  return lseEngine.initialize();
+}
+
+function initializeTurboEngine() {
+  const persisted = normalizeTurboSettings(store.get('turboSettings', {}), DEFAULT_TURBO_SETTINGS);
+  store.set('turboSettings', persisted);
+  turboEngine = new LuneraTurboEngine({
+    settings: persisted,
+    metadataCachePath: path.join(app.getPath('userData'), 'lte_metadata_cache.json')
+  });
+  configureTurboEngine(turboEngine);
+  return turboEngine.initialize();
+}
+
+function getTurboEngineInstance() {
+  if (turboEngine) return turboEngine;
+  initializeTurboEngine();
+  return turboEngine;
+}
+
+function getTurboSettings() {
+  return getTurboEngineInstance().getSettings();
+}
+
+function sanitizeTurboSettingsPatch(candidate) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw new Error('La configuración de LTE debe ser un objeto JSON');
+  }
+  const allowedKeys = new Set(Object.keys(DEFAULT_TURBO_SETTINGS));
+  const sanitized = {};
+  for (const [key, value] of Object.entries(candidate)) {
+    if (!allowedKeys.has(key) || key === 'configVersion') continue;
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (['string', 'number', 'boolean'].includes(typeof value)) sanitized[key] = value;
+  }
+  return sanitized;
+}
+
+function updateTurboSettings(candidate) {
+  const settings = getTurboEngineInstance().updateSettings(sanitizeTurboSettingsPatch(candidate));
+  store.set('turboSettings', settings);
+  return settings;
+}
+
+async function getTurboDiagnostics() {
+  const diagnostics = getTurboEngineInstance().getDiagnostics();
+  const cacheSettings = await getCacheSettings();
+  return {
+    ...diagnostics,
+    benchmark: lastTurboBenchmark ? {
+      measuredAt: lastTurboBenchmark.measuredAt,
+      runs: lastTurboBenchmark.runs,
+      quality: lastTurboBenchmark.quality,
+      baseline: lastTurboBenchmark.baseline,
+      elapsedMs: lastTurboBenchmark.elapsedMs,
+      summary: lastTurboBenchmark.summary,
+      comparison: lastTurboBenchmark.comparison
+    } : null,
+    cache: {
+      enabled: !!cacheSettings?.enabled,
+      maxSizeMB: Number(cacheSettings?.maxSizeMB || 0),
+      policy: 'La caché multimedia global sólo conserva contenido autorizado; LTE guarda metadatos efímeros.'
+    }
+  };
+}
+
+function normalizeTurboBenchmarkOptions(candidate = {}) {
+  const input = candidate && typeof candidate === 'object' ? candidate : {};
+  const validQualities = new Set(['auto', 'best', 'balanced', 'low', 'manual', 'medium', 'high', 'lossless']);
+  const turboSettings = getTurboSettings();
+  const runs = Math.max(1, Math.min(3, Math.round(Number(input.runs) || 1)));
+  const timeoutMs = Math.max(1_000, Math.min(120_000, Math.round(Number(input.timeoutMs) || turboSettings.extractionTimeoutMs)));
+  const quality = validQualities.has(String(input.quality || '').toLowerCase())
+    ? String(input.quality).toLowerCase()
+    : turboSettings.qualityMode;
+  const requestedFormatId = typeof input.manualFormatId === 'string' ? input.manualFormatId.trim() : '';
+  const manualFormatId = quality === 'manual'
+    ? (/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(requestedFormatId) ? requestedFormatId : turboSettings.manualFormatId)
+    : '';
+  const validCodecs = new Set(['auto', 'aac', 'opus', 'mp3', 'vorbis', 'flac']);
+  const preferredCodec = validCodecs.has(String(input.preferredCodec || '').toLowerCase())
+    ? String(input.preferredCodec).toLowerCase()
+    : turboSettings.preferredCodec;
+  return {
+    runs,
+    timeoutMs,
+    quality,
+    manualFormatId,
+    preferredCodec,
+    includeReuseScenarios: input.includeReuseScenarios !== false
+  };
+}
+
+async function runTurboBenchmark(videoUrl, candidateOptions = {}) {
+  if (activeTurboBenchmark) {
+    throw new Error('Ya hay un benchmark LTE en curso');
+  }
+
+  ensureInternetAccess('El benchmark de LTE');
+  validateMediaUrl(videoUrl, 'lte');
+  const options = normalizeTurboBenchmarkOptions(candidateOptions);
+  const controller = new AbortController();
+  activeTurboBenchmark = { controller, startedAt: Date.now() };
+  try {
+    const runner = new BenchmarkRunner({
+      turboEngine: getTurboEngineInstance(),
+      baselineName: 'yt-dlp tradicional',
+      // The reference path deliberately bypasses LTE. Both paths run a fresh
+      // yt-dlp resolution under equivalent quality/timeout conditions.
+      baselineResolver: (url, resolverOptions) => ytdlpService.extract(url, resolverOptions)
+    });
+    const result = await runner.run(videoUrl, { ...options, signal: controller.signal });
+    lastTurboBenchmark = result;
+    return result;
+  } finally {
+    activeTurboBenchmark = null;
+  }
+}
+
+function getLseEngineInstance() {
+  if (lseEngine) return lseEngine;
+  // La inicialización normal ocurre en app.whenReady(). Este fallback sólo
+  // protege IPCs tempranos sin volver a depender de extractores heredados.
+  initializeLseEngine();
+  return lseEngine;
+}
+
+function getLseSettings() {
+  return getLseEngineInstance().getSettings();
+}
+
+function sanitizeLseSettingsPatch(candidate) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    throw new Error('La configuración de LSE debe ser un objeto JSON');
+  }
+
+  const allowedKeys = new Set(Object.keys(DEFAULT_LSE_SETTINGS));
+  const sanitized = {};
+  for (const [key, value] of Object.entries(candidate)) {
+    if (!allowedKeys.has(key) || key === 'engine' || key === 'configVersion') continue;
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+    if (['string', 'number', 'boolean'].includes(typeof value)) sanitized[key] = value;
+  }
+  return sanitized;
+}
+
+async function updateLseSettings(candidate) {
+  const patch = sanitizeLseSettingsPatch(candidate);
+  const engine = getLseEngineInstance();
+  const settings = engine.updateSettings(patch);
+  store.set('lseSettings', settings);
+
+  // La caché multimedia global es la autoridad. LSE sólo administra su
+  // configuración de resolución; no puede sobrescribir la preferencia de
+  // almacenamiento elegida por el usuario.
+  return settings;
+}
+
+function applyLseExtractorStates(candidate) {
+  if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) {
+    return getLseEngineInstance().getExtractorStatus();
+  }
+
+  const engine = getLseEngineInstance();
+  const available = new Set(engine.getExtractorStatus().map(extractor => extractor.id));
+  // Un archivo importado describe el estado completo: antes de aplicar sus
+  // excepciones se vuelve al valor predeterminado (todos disponibles).
+  engine.getExtractorStatus().forEach((extractor) => {
+    if (extractor.enabled === false) engine.setExtractorEnabled(extractor.id, true);
+  });
+  const persisted = {};
+  for (const [id, enabled] of Object.entries(candidate)) {
+    if (!available.has(id) || typeof enabled !== 'boolean') continue;
+    const status = engine.setExtractorEnabled(id, enabled);
+    persisted[status.id] = status.enabled;
+  }
+  store.set('lseExtractorStates', persisted);
+  return engine.getExtractorStatus();
+}
+
+function requireMainWindowSender(event) {
+  if (!isMainWindowSender(event)) {
+    throw new Error('Solicitud del motor de streaming no autorizada');
   }
 }
 
@@ -195,10 +470,27 @@ db.serialize(() => {
       added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // Preserve cache metadata independently from listening history.
+  db.run(`
+    CREATE TABLE IF NOT EXISTS audio_cache_metadata (
+      video_id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      artist TEXT,
+      thumbnail TEXT,
+      url TEXT,
+      duration INTEGER,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 });
 
 // Migrar datos de userData.json si existe
 function migrateUserData() {
+  if (store.get(LEGACY_USER_DATA_MIGRATION_KEY, false)) {
+    return;
+  }
+
   const jsonPath = path.join(__dirname, 'userData.json');
   if (fs.existsSync(jsonPath)) {
     try {
@@ -230,14 +522,29 @@ function migrateUserData() {
   } else {
     console.log('No se encontró userData.json para migrar');
   }
+  // This file is a one-time migration source, not a backup to restore after
+  // the user has reset the application.
+  store.set(LEGACY_USER_DATA_MIGRATION_KEY, true);
 }
 
 // Actualizar historial de reproducción
-function updatePlaybackHistory(track) {
+function updatePlaybackHistory(track, expectedDataGeneration = applicationDataGeneration) {
+  const trackId = getTrackId(track);
+  if (expectedDataGeneration !== applicationDataGeneration) {
+    return;
+  }
+
+  // Never persist a temporary fallback title: that was the source of the
+  // permanent "Audio en caché (...)" names after playing old cache files.
+  if (!trackId || !hasUsableTrackTitle(track?.title)) {
+    console.warn('Se omitió guardar en el historial una pista sin metadata válida de caché');
+    return;
+  }
+
   db.run(`
     INSERT OR REPLACE INTO recently_played (video_id, title, artist, thumbnail, url, duration)
     VALUES (?, ?, ?, ?, ?, ?)
-  `, [track.id, track.title, track.artist, track.thumbnail, track.url, track.duration], (err) => {
+  `, [trackId, track.title, track.artist, track.thumbnail, track.url, track.duration], (err) => {
     if (err) {
       console.error('Error al guardar en recently_played:', err);
       return;
@@ -247,7 +554,7 @@ function updatePlaybackHistory(track) {
       UPDATE recently_played
       SET played_at = CURRENT_TIMESTAMP
       WHERE video_id = ?
-    `, [track.id], (updateErr) => {
+    `, [trackId], (updateErr) => {
       if (updateErr) console.error('Error al actualizar played_at:', updateErr);
       else console.log('Historial actualizado:', track.title);
     });
@@ -270,6 +577,117 @@ function dbGet(sql, params = []) {
       resolve(row || null);
     });
   });
+}
+
+function dbRun(sql, params = []) {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, function onRun(err) {
+      if (err) return reject(err);
+      resolve({ changes: this.changes || 0 });
+    });
+  });
+}
+
+function getTrackId(track = {}) {
+  return String(track.id || track.video_id || '').trim();
+}
+
+function isTemporaryCacheTitle(title = '') {
+  return /^audio en cach(?:e|é)(?:\s|\(|$)/i.test(String(title).trim());
+}
+
+function hasUsableTrackTitle(title = '') {
+  const normalizedTitle = String(title).trim();
+  return Boolean(normalizedTitle) && !isTemporaryCacheTitle(normalizedTitle);
+}
+
+function getAudioCacheDirectory() {
+  return path.join(app.getPath('userData'), AUDIO_CACHE_DIRECTORY_NAME);
+}
+
+function normalizeCacheMetadata(track = {}) {
+  const videoId = getTrackId(track);
+  const title = String(track.title || '').trim();
+  if (!videoId || !hasUsableTrackTitle(title)) return null;
+
+  const duration = Number(track.duration);
+  return {
+    video_id: videoId,
+    title,
+    artist: String(track.artist || '').trim(),
+    thumbnail: String(track.thumbnail || '').trim(),
+    url: String(track.url || `https://www.youtube.com/watch?v=${videoId}`).trim(),
+    duration: Number.isFinite(duration) && duration > 0 ? duration : 0
+  };
+}
+
+function saveAudioCacheMetadata(track, expectedDataGeneration = applicationDataGeneration) {
+  const metadata = normalizeCacheMetadata(track);
+  if (!metadata || expectedDataGeneration !== applicationDataGeneration) return Promise.resolve(false);
+
+  return dbRun(`
+    INSERT INTO audio_cache_metadata (video_id, title, artist, thumbnail, url, duration, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(video_id) DO UPDATE SET
+      title = excluded.title,
+      artist = CASE WHEN excluded.artist <> '' THEN excluded.artist ELSE audio_cache_metadata.artist END,
+      thumbnail = CASE WHEN excluded.thumbnail <> '' THEN excluded.thumbnail ELSE audio_cache_metadata.thumbnail END,
+      url = CASE WHEN excluded.url <> '' THEN excluded.url ELSE audio_cache_metadata.url END,
+      duration = CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE audio_cache_metadata.duration END,
+      updated_at = CURRENT_TIMESTAMP
+  `, [
+    metadata.video_id,
+    metadata.title,
+    metadata.artist,
+    metadata.thumbnail,
+    metadata.url,
+    metadata.duration
+  ]).then(() => expectedDataGeneration === applicationDataGeneration);
+}
+
+async function getStoredTrackMetadata(videoId) {
+  const normalizedVideoId = String(videoId || '').trim();
+  if (!normalizedVideoId) return null;
+
+  // Cache metadata is deliberately first. The other tables are fallbacks for
+  // cache files created by an older version of the application.
+  const tables = [
+    'audio_cache_metadata',
+    'recently_played',
+    'recommendations',
+    'library',
+    'favorites'
+  ];
+
+  for (const table of tables) {
+    try {
+      const metadata = await dbGet(
+        `SELECT video_id, title, artist, thumbnail, url, duration FROM ${table} WHERE video_id = ? LIMIT 1`,
+        [normalizedVideoId]
+      );
+
+      if (!metadata || !hasUsableTrackTitle(metadata.title)) continue;
+
+      const normalized = {
+        ...metadata,
+        id: metadata.video_id || normalizedVideoId
+      };
+
+      // Opportunistically repair metadata for cache files created before the
+      // dedicated cache index existed.
+      if (table !== 'audio_cache_metadata') {
+        saveAudioCacheMetadata(normalized).catch((error) => {
+          console.warn('No se pudo migrar metadata de caché:', error.message);
+        });
+      }
+
+      return normalized;
+    } catch (error) {
+      console.warn(`No se pudo leer metadata de ${table}:`, error.message);
+    }
+  }
+
+  return null;
 }
 
 function normalizeArtistName(artist = '') {
@@ -390,21 +808,26 @@ function scoreRecommendationCandidate(video, query, profile, rank) {
   return score + (query.weight || 0);
 }
 
-async function persistRecommendations(recommendations) {
+async function persistRecommendations(recommendations, expectedDataGeneration = applicationDataGeneration) {
+  if (expectedDataGeneration !== applicationDataGeneration) return false;
   await new Promise((resolve) => db.run('DELETE FROM recommendations', () => resolve()));
+  if (expectedDataGeneration !== applicationDataGeneration) return false;
   await Promise.all(recommendations.map((track) => new Promise((resolve) => {
     db.run(`
       INSERT OR REPLACE INTO recommendations (video_id, title, artist, thumbnail, url, duration)
       VALUES (?, ?, ?, ?, ?, ?)
     `, [track.id, track.title, track.artist, track.thumbnail, track.url, track.duration], () => resolve());
   })));
+  return expectedDataGeneration === applicationDataGeneration;
 }
 
 // Version nueva: recomendaciones afinadas por artista dominante, historial y titulos escuchados.
-async function generateRecommendations(seedArtist = '') {
+async function generateRecommendations(seedArtist = '', expectedDataGeneration = applicationDataGeneration) {
   try {
+    if (expectedDataGeneration !== applicationDataGeneration) return [];
     ensureInternetAccess('Las recomendaciones');
     const profile = await buildRecommendationProfile();
+    if (expectedDataGeneration !== applicationDataGeneration) return [];
 
     if (seedArtist) {
       const normalizedSeed = normalizeArtistName(seedArtist);
@@ -420,6 +843,7 @@ async function generateRecommendations(seedArtist = '') {
     console.log('Generando recomendaciones con perfil:', profile.topArtists.map(item => item.artist));
 
     for (const query of queries) {
+      if (expectedDataGeneration !== applicationDataGeneration) return [];
       let searchResults = [];
       try {
         searchResults = await searchVideosSafely(query.q);
@@ -460,7 +884,8 @@ async function generateRecommendations(seedArtist = '') {
       .sort((a, b) => b.score - a.score)
       .slice(0, 12);
 
-    await persistRecommendations(recommendations);
+    await persistRecommendations(recommendations, expectedDataGeneration);
+    if (expectedDataGeneration !== applicationDataGeneration) return [];
     return recommendations;
   } catch (error) {
     console.error('Error en recomendaciones:', error);
@@ -488,6 +913,19 @@ function createWindow() {
   });
   console.log('Ventana principal creada');
 
+  const createdWindow = mainWindow;
+  createdWindow.webContents.on('did-finish-load', () => {
+    if (createdWindow.isDestroyed()) return;
+    const updateStatus = appUpdaterController?.getStatus?.();
+    if (updateStatus) {
+      try {
+        createdWindow.webContents.send('app-update:ready', updateStatus);
+      } catch (error) {
+        console.warn('[updates] No se pudo reenviar la actualización al renderer:', error.message);
+      }
+    }
+  });
+
   // Maximizar la ventana al inicio
   mainWindow.maximize();
   mainWindow.show();
@@ -502,6 +940,8 @@ function createWindow() {
   }
 
   mainWindow.on('closed', () => {
+    gameOverlay?.dispose();
+    gameOverlay = null;
     mainWindow = null;
     if (miniPlayerWindow && !miniPlayerWindow.isDestroyed()) {
       miniPlayerWindow.close();
@@ -634,6 +1074,24 @@ ipcMain.on('maximize-window', () => {
 ipcMain.on('close-window', () => {
   console.log('Cerrando ventana');
   mainWindow.close();
+});
+
+function isMainWindowSender(event) {
+  return Boolean(
+    mainWindow
+    && !mainWindow.isDestroyed()
+    && event?.sender === mainWindow.webContents
+  );
+}
+
+ipcMain.handle('app-update:get-status', (event) => {
+  if (!isMainWindowSender(event)) return null;
+  return appUpdaterController?.getStatus?.() || null;
+});
+
+ipcMain.handle('app-update:install', (event) => {
+  if (!isMainWindowSender(event)) return false;
+  return appUpdaterController?.install?.() === true;
 });
 
 function normalizeVideoSearchResults(searchResponse) {
@@ -791,12 +1249,12 @@ function getPlayableCachePath(candidates) {
 }
 
 async function buildCacheLibrary() {
-  const dir = path.join(app.getPath('userData'), 'audio_cache');
+  const dir = getAudioCacheDirectory();
   try {
     if (!fs.existsSync(dir)) return [];
 
     const files = fs.readdirSync(dir)
-      .filter(name => /\.(webm|m4a|mp4|mp3)$/i.test(name))
+      .filter(name => new RegExp(`\\.(${AUDIO_CACHE_EXTENSIONS.join('|')})$`, 'i').test(name))
       .map(name => {
         const filePath = path.join(dir, name);
         const stats = fs.statSync(filePath);
@@ -814,16 +1272,7 @@ async function buildCacheLibrary() {
 
     const cacheItems = [];
     for (const file of files) {
-      const meta = await dbGet(`
-        SELECT video_id, title, artist, thumbnail, url, duration FROM recently_played WHERE video_id = ?
-        UNION
-        SELECT video_id, title, artist, thumbnail, url, duration FROM recommendations WHERE video_id = ?
-        UNION
-        SELECT video_id, title, artist, thumbnail, url, duration FROM library WHERE video_id = ?
-        UNION
-        SELECT video_id, title, artist, thumbnail, url, duration FROM favorites WHERE video_id = ?
-        LIMIT 1
-      `, [file.videoId, file.videoId, file.videoId, file.videoId]).catch(() => null);
+      const meta = await getStoredTrackMetadata(file.videoId);
 
       cacheItems.push({
         id: file.videoId,
@@ -853,22 +1302,20 @@ function getAudioExtensionFromExtraction(extraction = {}) {
     || extraction.metadata?.streamingProfile?.container
     || 'webm';
   const ext = String(rawContainer).toLowerCase().split('/').pop().replace(/[^a-z0-9]/g, '');
-  if (['m4a', 'mp4', 'mp3', 'webm', 'opus'].includes(ext)) return ext === 'opus' ? 'webm' : ext;
+  if (['m4a', 'mp4', 'mp3', 'webm', 'opus', 'ogg', 'aac', 'wav', 'flac'].includes(ext)) {
+    return ext === 'opus' ? 'webm' : ext;
+  }
   return 'webm';
+}
+
+function isPersistentAudioCacheAllowed(extraction = {}) {
+  return extraction?.sourcePolicy?.allowPersistentCache === true
+    || extraction?.sourcePolicy?.persistMedia === true;
 }
 
 async function buildCachedTrackData(videoId, videoUrl, requestedQuality, cachedPath) {
   const meta = videoId
-    ? await dbGet(`
-        SELECT video_id, title, artist, thumbnail, url, duration FROM recently_played WHERE video_id = ?
-        UNION
-        SELECT video_id, title, artist, thumbnail, url, duration FROM recommendations WHERE video_id = ?
-        UNION
-        SELECT video_id, title, artist, thumbnail, url, duration FROM library WHERE video_id = ?
-        UNION
-        SELECT video_id, title, artist, thumbnail, url, duration FROM favorites WHERE video_id = ?
-        LIMIT 1
-      `, [videoId, videoId, videoId, videoId]).catch(() => null)
+    ? await getStoredTrackMetadata(videoId)
     : null;
 
   return {
@@ -892,10 +1339,11 @@ async function buildCachedTrackData(videoId, videoUrl, requestedQuality, cachedP
   };
 }
 
-function getMemoryStreamCacheKey(videoUrl, quality, extractorMode = audioExtractorPreference) {
+function getMemoryStreamCacheKey(videoUrl, quality, extractorMode = audioExtractorPreference, manualFormatId = '') {
   const videoId = getVideoId(videoUrl);
   const mediaKey = videoId || String(videoUrl || '').trim();
-  return `${normalizeExtractorMode(extractorMode)}|${quality || 'medium'}|${mediaKey}`;
+  const manualKey = String(manualFormatId || '').trim().slice(0, 80);
+  return `${normalizeExtractorMode(extractorMode)}|${quality || 'medium'}|${manualKey}|${mediaKey}`;
 }
 
 function cloneStreamExtraction(extraction = {}) {
@@ -912,6 +1360,7 @@ function cloneStreamExtraction(extraction = {}) {
       : extraction.formats,
     selectedFormat: extraction.selectedFormat ? { ...extraction.selectedFormat } : extraction.selectedFormat,
     httpHeaders: extraction.httpHeaders ? { ...extraction.httpHeaders } : extraction.httpHeaders,
+    sourcePolicy: extraction.sourcePolicy ? { ...extraction.sourcePolicy } : extraction.sourcePolicy,
     attempts: Array.isArray(extraction.attempts)
       ? extraction.attempts.map(attempt => ({ ...attempt }))
       : extraction.attempts
@@ -935,12 +1384,19 @@ function pruneMemoryStreamCache() {
   oldest.forEach(([key]) => memoryStreamCache.delete(key));
 }
 
+function isUsableMemoryStreamExtraction(extraction = {}) {
+  const expiresAt = Number(extraction?.sourcePolicy?.expiresAt || extraction?.expiresAt || 0);
+  // Keep a small safety margin so a just-expiring signed resource is resolved
+  // again before the audio element has a chance to request it.
+  return !Number.isFinite(expiresAt) || expiresAt <= 0 || expiresAt > Date.now() + 5_000;
+}
+
 function getMemoryCachedExtraction(cacheKey) {
   pruneMemoryStreamCache();
   const entry = memoryStreamCache.get(cacheKey);
   if (!entry) return null;
 
-  if (Date.now() - entry.createdAt > MEMORY_STREAM_TTL_MS) {
+  if (Date.now() - entry.createdAt > MEMORY_STREAM_TTL_MS || !isUsableMemoryStreamExtraction(entry.extraction)) {
     memoryStreamCache.delete(cacheKey);
     return null;
   }
@@ -950,7 +1406,7 @@ function getMemoryCachedExtraction(cacheKey) {
 }
 
 function storeMemoryStreamExtraction(cacheKey, extraction) {
-  if (!cacheKey || !extraction?.audioUrl) return;
+  if (!cacheKey || !extraction?.audioUrl || !isUsableMemoryStreamExtraction(extraction)) return;
   memoryStreamCache.set(cacheKey, {
     createdAt: Date.now(),
     lastUsedAt: Date.now(),
@@ -974,13 +1430,17 @@ function prepareExtractionForPlayback(extraction, fromMemoryCache = false) {
 async function getOrExtractAudio(videoUrl, extractionOptions = {}, options = {}) {
   const mode = normalizeExtractorMode(extractionOptions.mode || audioExtractorPreference);
   const quality = extractionOptions.quality || 'medium';
-  const cacheKey = getMemoryStreamCacheKey(videoUrl, quality, mode);
+  const cacheKey = getMemoryStreamCacheKey(videoUrl, quality, mode, extractionOptions.manualFormatId);
+  const signal = extractionOptions.signal;
+
+  throwIfPlaybackAborted(signal);
 
   if (options.forceRefresh) {
     memoryStreamCache.delete(cacheKey);
   } else {
     const cachedExtraction = getMemoryCachedExtraction(cacheKey);
     if (cachedExtraction) {
+      throwIfPlaybackAborted(signal);
       return { extraction: cachedExtraction, cacheKey, fromMemoryCache: true };
     }
 
@@ -988,11 +1448,14 @@ async function getOrExtractAudio(videoUrl, extractionOptions = {}, options = {})
     if (preloadJob) {
       try {
         const preloadedExtraction = await preloadJob;
-        return {
-          extraction: cloneStreamExtraction(preloadedExtraction),
-          cacheKey,
-          fromMemoryCache: true
-        };
+        throwIfPlaybackAborted(signal);
+        if (isUsableMemoryStreamExtraction(preloadedExtraction)) {
+          return {
+            extraction: cloneStreamExtraction(preloadedExtraction),
+            cacheKey,
+            fromMemoryCache: true
+          };
+        }
       } catch (error) {
         console.warn('[audio-preload] precarga descartada:', error.message);
       }
@@ -1002,8 +1465,11 @@ async function getOrExtractAudio(videoUrl, extractionOptions = {}, options = {})
   const extraction = await extractAudio(videoUrl, {
     ...extractionOptions,
     mode,
-    quality
+    quality,
+    // A provider refresh must also bypass LTE's in-memory resolved URL.
+    forceRefresh: options.forceRefresh === true
   });
+  throwIfPlaybackAborted(signal);
   storeMemoryStreamExtraction(cacheKey, extraction);
 
   return { extraction: cloneStreamExtraction(extraction), cacheKey, fromMemoryCache: false };
@@ -1017,39 +1483,83 @@ function buildRequestHeaders(headers = {}) {
   };
 }
 
+function sanitizeRendererProxyHeaders(headers = {}) {
+  const allowed = new Set(['user-agent', 'accept', 'accept-language', 'referer', 'origin']);
+  const sanitized = {};
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return sanitized;
+  for (const [rawName, rawValue] of Object.entries(headers)) {
+    const name = String(rawName || '').toLowerCase();
+    const value = String(rawValue || '').trim();
+    if (!allowed.has(name) || !value || value.length > 1024 || /[\r\n]/.test(value)) continue;
+    sanitized[name] = value;
+  }
+  return sanitized;
+}
+
 function cleanupAudioProxyEntries() {
   const now = Date.now();
   for (const [token, entry] of audioProxyEntries) {
     if (!entry || now - entry.createdAt > AUDIO_PROXY_TTL_MS) {
-      if (entry?.timeout) clearTimeout(entry.timeout);
-      audioProxyEntries.delete(token);
+      releaseAudioProxyEntry(token, entry);
     }
   }
 }
 
-function createAudioProxyUrl(extraction = {}) {
+function releaseAudioProxyEntry(token, entry = audioProxyEntries.get(token)) {
+  if (entry?.timeout) clearTimeout(entry.timeout);
+  audioProxyEntries.delete(token);
+  if (entry?.lteSessionId) {
+    try { getTurboEngineInstance().streamManager.remove(entry.lteSessionId); } catch (error) {}
+  }
+}
+
+function createAudioProxyUrl(extraction = {}, options = {}) {
   if (!audioProxyPort) {
     throw new Error('El proxy local de audio no esta listo');
   }
 
-  const token = crypto.randomBytes(24).toString('hex');
+  validateProxyableAudioUrl(extraction.audioUrl, extraction.sourcePolicy);
+
+  const isLteStream = extraction?.engine === 'lte' || extraction?.extractor === 'lte';
+  let token = crypto.randomBytes(24).toString('hex');
+  let lteSession = null;
+  let sessionData = null;
+  if (isLteStream) {
+    lteSession = getTurboEngineInstance().createStreamSession(extraction, {
+      requestId: options.requestId,
+      resolutionKey: extraction?.lte?.resolutionKey
+    });
+    token = lteSession.id;
+    sessionData = getTurboEngineInstance().getStreamSession(token);
+  }
+  const expiresAt = Number(sessionData?.expiresAt || extraction?.sourcePolicy?.expiresAt || 0);
+  const ttlMs = Number.isFinite(expiresAt) && expiresAt > Date.now()
+    ? Math.max(1_000, Math.min(AUDIO_PROXY_TTL_MS, expiresAt - Date.now()))
+    : AUDIO_PROXY_TTL_MS;
   const timeout = setTimeout(() => {
-    audioProxyEntries.delete(token);
-  }, AUDIO_PROXY_TTL_MS);
+    releaseAudioProxyEntry(token);
+  }, ttlMs);
   if (typeof timeout.unref === 'function') timeout.unref();
 
   audioProxyEntries.set(token, {
-    audioUrl: extraction.audioUrl,
-    httpHeaders: extraction.httpHeaders || {},
+    audioUrl: sessionData?.audioUrl || extraction.audioUrl,
+    httpHeaders: sessionData?.httpHeaders || extraction.httpHeaders || {},
+    sourcePolicy: sessionData?.sourcePolicy || extraction.sourcePolicy || null,
     createdAt: Date.now(),
-    timeout
+    timeout,
+    lteSessionId: lteSession?.id || null,
+    requestId: String(options.requestId || extraction?.lte?.requestId || '').slice(0, 96),
+    videoUrl: options.videoUrl || extraction?.metadata?.url || '',
+    quality: options.quality || extraction?.metadata?.streamingProfile?.requested || 'medium',
+    extractorMode: options.extractorMode || extraction?.mode || audioExtractorPreference,
+    refreshAttempts: 0
   });
   cleanupAudioProxyEntries();
 
   return `http://${AUDIO_PROXY_HOST}:${audioProxyPort}/audio/${token}`;
 }
 
-function validateProxyableAudioUrl(audioUrl) {
+function validateProxyableAudioUrl(audioUrl, sourcePolicy = null) {
   let parsedUrl;
   try {
     parsedUrl = new URL(audioUrl);
@@ -1062,6 +1572,22 @@ function validateProxyableAudioUrl(audioUrl) {
   }
 
   const hostname = parsedUrl.hostname.toLowerCase();
+  const isLseDirectMedia = sourcePolicy?.type === 'direct-media'
+    && sourcePolicy.publicNetworkOnly === true;
+
+  if (isLseDirectMedia) {
+    if (isBlockedHostname(hostname)) {
+      throw new Error('El proxy LSE bloqueó un destino local o interno');
+    }
+    if (net.isIP(hostname) && isUnsafeIp(hostname)) {
+      throw new Error('El proxy LSE bloqueó una IP privada');
+    }
+    if (sourcePolicy.approvedHost && hostname !== String(sourcePolicy.approvedHost).toLowerCase()) {
+      throw new Error('La redirección de LSE cambió a un host no aprobado');
+    }
+    return true;
+  }
+
   const isAllowedMediaHost = hostname === 'googlevideo.com'
     || hostname.endsWith('.googlevideo.com')
     || hostname === 'youtube.com'
@@ -1070,6 +1596,27 @@ function validateProxyableAudioUrl(audioUrl) {
   if (!isAllowedMediaHost) {
     throw new Error('Solo se puede proxificar audio de YouTube');
   }
+}
+
+function isLseDirectMediaPolicy(sourcePolicy = null) {
+  return sourcePolicy?.type === 'direct-media' && sourcePolicy.publicNetworkOnly === true;
+}
+
+async function getLseProxyDestination(parsedUrl, sourcePolicy) {
+  if (!isLseDirectMediaPolicy(sourcePolicy)) return null;
+
+  const approvedAddress = String(sourcePolicy.approvedAddress || '').trim();
+  if (approvedAddress && !isUnsafeIp(approvedAddress)) {
+    return {
+      address: approvedAddress,
+      family: approvedAddress.includes(':') ? 6 : 4
+    };
+  }
+
+  // Compatibilidad con entradas de caché creadas antes de que LSE almacenara
+  // la IP validada: se vuelve a validar y fija la resolución para este stream.
+  const destination = await getLseEngineInstance().networkManager.assertPublicUrl(parsedUrl.toString());
+  return { address: destination.address, family: destination.family };
 }
 
 function copyAudioProxyHeaders(remoteResponse, clientResponse) {
@@ -1098,7 +1645,45 @@ function copyAudioProxyHeaders(remoteResponse, clientResponse) {
   clientResponse.setHeader('timing-allow-origin', '*');
 }
 
-function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entry.audioUrl, redirectCount = 0) {
+async function refreshExpiredAudioProxyEntry(entry) {
+  if (!entry) return false;
+  if (entry.refreshPromise) return entry.refreshPromise;
+
+  const refreshPromise = refreshExpiredAudioProxyEntryOnce(entry);
+  entry.refreshPromise = refreshPromise;
+  try {
+    return await refreshPromise;
+  } finally {
+    if (entry.refreshPromise === refreshPromise) entry.refreshPromise = null;
+  }
+}
+
+async function refreshExpiredAudioProxyEntryOnce(entry) {
+  const isLteEntry = entry?.lteSessionId && entry?.extractorMode === 'lte';
+  if (!isLteEntry || !entry.videoUrl || entry.refreshAttempts >= 1) return false;
+  entry.refreshAttempts += 1;
+  try {
+    const result = await getOrExtractAudio(entry.videoUrl, {
+      mode: 'lte',
+      quality: entry.quality || 'medium',
+      timeoutMs: getTurboSettings().extractionTimeoutMs,
+      requestId: entry.requestId || `refresh-${Date.now()}`
+    }, { forceRefresh: true });
+    const extraction = prepareExtractionForPlayback(result.extraction, result.fromMemoryCache);
+    validateProxyableAudioUrl(extraction.audioUrl, extraction.sourcePolicy);
+    const refreshedSession = getTurboEngineInstance().refreshStreamSession(entry.lteSessionId, extraction);
+    entry.audioUrl = refreshedSession?.audioUrl || extraction.audioUrl;
+    entry.httpHeaders = refreshedSession?.httpHeaders || extraction.httpHeaders || {};
+    entry.sourcePolicy = refreshedSession?.sourcePolicy || extraction.sourcePolicy || null;
+    entry.refreshAttempts = 0;
+    return true;
+  } catch (error) {
+    console.warn('[audio-proxy] no se pudo renovar el recurso LTE expirado:', error.message);
+    return false;
+  }
+}
+
+async function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entry.audioUrl, redirectCount = 0) {
   let parsedUrl;
   try {
     parsedUrl = new URL(sourceUrl);
@@ -1114,15 +1699,52 @@ function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entr
     return;
   }
 
+  try {
+    validateProxyableAudioUrl(sourceUrl, entry.sourcePolicy);
+  } catch (validationError) {
+    clientResponse.writeHead(502, {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store'
+    });
+    clientResponse.end(`Destino de audio bloqueado: ${validationError.message}`);
+    return;
+  }
+
+  let lseDestination = null;
+  try {
+    lseDestination = await getLseProxyDestination(parsedUrl, entry.sourcePolicy);
+  } catch (validationError) {
+    clientResponse.writeHead(502, {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': 'no-store'
+    });
+    clientResponse.end(`Destino de audio bloqueado: ${validationError.message}`);
+    return;
+  }
+  if (clientResponse.destroyed) return;
+
   const headers = buildRequestHeaders(entry.httpHeaders);
-  if (clientRequest.headers.range) {
+  if (clientRequest.headers.range && entry.sourcePolicy?.supportsRange !== false) {
     headers.Range = clientRequest.headers.range;
   }
 
   const transport = parsedUrl.protocol === 'https:' ? https : http;
+  const requestOptions = {
+    protocol: parsedUrl.protocol,
+    hostname: parsedUrl.hostname,
+    port: parsedUrl.port || undefined,
+    path: `${parsedUrl.pathname}${parsedUrl.search}`,
+    method: clientRequest.method === 'HEAD' ? 'HEAD' : 'GET',
+    headers
+  };
+  if (lseDestination) {
+    requestOptions.lookup = (hostname, options, callback) => callback(null, lseDestination.address, lseDestination.family);
+    if (parsedUrl.protocol === 'https:') requestOptions.servername = parsedUrl.hostname;
+  }
   let completed = false;
   let upstreamResponseRef = null;
-  const upstreamRequest = transport.get(parsedUrl, { headers }, (upstreamResponse) => {
+  if (entry.lteSessionId) getTurboEngineInstance().streamManager.markRequest(entry.lteSessionId);
+  const upstreamRequest = transport.request(requestOptions, (upstreamResponse) => {
     upstreamResponseRef = upstreamResponse;
     if ([301, 302, 303, 307, 308].includes(upstreamResponse.statusCode) && upstreamResponse.headers.location) {
       upstreamResponse.resume();
@@ -1133,12 +1755,47 @@ function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entr
       }
 
       const redirectedUrl = new URL(upstreamResponse.headers.location, parsedUrl).toString();
-      proxyRemoteAudio(entry, clientRequest, clientResponse, redirectedUrl, redirectCount + 1);
+      try {
+        validateProxyableAudioUrl(redirectedUrl, entry.sourcePolicy);
+      } catch (validationError) {
+        clientResponse.writeHead(502, {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store'
+        });
+        clientResponse.end(`Redirección de audio bloqueada: ${validationError.message}`);
+        return;
+      }
+      void proxyRemoteAudio(entry, clientRequest, clientResponse, redirectedUrl, redirectCount + 1);
+      return;
+    }
+
+    if ([403, 410].includes(upstreamResponse.statusCode) && !clientResponse.headersSent) {
+      upstreamResponse.resume();
+      void refreshExpiredAudioProxyEntry(entry).then((refreshed) => {
+        if (refreshed && !clientResponse.destroyed) {
+          void proxyRemoteAudio(entry, clientRequest, clientResponse, entry.audioUrl, redirectCount + 1);
+          return;
+        }
+        clientResponse.writeHead(502, {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store'
+        });
+        clientResponse.end('El recurso de audio expiró y no se pudo renovar');
+      });
+      return;
+    }
+
+    if (upstreamResponse.statusCode === 416) {
+      copyAudioProxyHeaders(upstreamResponse, clientResponse);
+      upstreamResponse.resume();
+      clientResponse.writeHead(416);
+      clientResponse.end();
       return;
     }
 
     if (upstreamResponse.statusCode < 200 || upstreamResponse.statusCode >= 300) {
       upstreamResponse.resume();
+      if (entry.lteSessionId) getTurboEngineInstance().recordStreamFailure(entry.lteSessionId);
       if (!clientResponse.headersSent) {
         clientResponse.writeHead(502, {
           'content-type': 'text/plain; charset=utf-8',
@@ -1158,12 +1815,23 @@ function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entr
       return;
     }
 
+    let firstChunk = true;
+    upstreamResponse.on('data', (chunk) => {
+      if (!entry.lteSessionId) return;
+      if (firstChunk) {
+        firstChunk = false;
+        getTurboEngineInstance().recordStreamFirstByte(entry.lteSessionId, entry.requestId);
+      }
+      getTurboEngineInstance().recordStreamChunk(entry.lteSessionId, chunk.length);
+    });
+
     upstreamResponse.on('end', () => {
       completed = true;
     });
 
     upstreamResponse.on('aborted', () => {
       if (!completed) {
+        if (entry.lteSessionId) getTurboEngineInstance().recordStreamFailure(entry.lteSessionId);
         console.warn('[audio-proxy] upstream abortado por el servidor remoto');
         clientResponse.destroy(new Error('Stream remoto de audio abortado'));
       }
@@ -1171,6 +1839,7 @@ function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entr
 
     upstreamResponse.on('error', (error) => {
       if (!completed) {
+        if (entry.lteSessionId) getTurboEngineInstance().recordStreamFailure(entry.lteSessionId);
         console.warn('[audio-proxy] error leyendo audio remoto:', error.message);
         clientResponse.destroy(error);
       }
@@ -1178,6 +1847,8 @@ function proxyRemoteAudio(entry, clientRequest, clientResponse, sourceUrl = entr
 
     upstreamResponse.pipe(clientResponse);
   });
+
+  upstreamRequest.end();
 
   upstreamRequest.setTimeout(60000, () => {
     upstreamRequest.destroy(new Error('Timeout del proxy local de audio'));
@@ -1228,7 +1899,7 @@ function handleAudioProxyRequest(request, response) {
       return;
     }
 
-    proxyRemoteAudio(entry, request, response);
+    void proxyRemoteAudio(entry, request, response);
   } catch (error) {
     response.writeHead(500);
     response.end(`Error del proxy local de audio: ${error.message}`);
@@ -1271,41 +1942,98 @@ function sendPlaybackProgress(webContents, event = {}) {
   }
 }
 
-function downloadUrlToFile(audioUrl, targetPath, headers = {}, timeoutMs = 60000, redirectCount = 0, onProgress = null) {
+function createAudioCacheClearedError() {
+  const error = new Error('La descarga de caché fue cancelada porque la caché se vació');
+  error.code = 'AUDIO_CACHE_CLEARED';
+  return error;
+}
+
+function isAudioCacheClearedError(error) {
+  return error?.code === 'AUDIO_CACHE_CLEARED';
+}
+
+function downloadUrlToFile(
+  audioUrl,
+  targetPath,
+  headers = {},
+  timeoutMs = 60000,
+  redirectCount = 0,
+  onProgress = null,
+  signal = null
+) {
   return new Promise((resolve, reject) => {
+    let request = null;
+    let response = null;
+    let writeStream = null;
+    let settled = false;
+
+    const cleanupAbortListener = () => {
+      if (signal && abortListener) signal.removeEventListener('abort', abortListener);
+    };
+    const finish = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanupAbortListener();
+      if (error) reject(error);
+      else resolve(true);
+    };
+    const abortListener = () => {
+      const error = createAudioCacheClearedError();
+      if (response && !response.destroyed) response.destroy(error);
+      if (writeStream && !writeStream.destroyed) writeStream.destroy(error);
+      if (request && !request.destroyed) request.destroy(error);
+      finish(error);
+    };
+
+    if (signal?.aborted) {
+      finish(createAudioCacheClearedError());
+      return;
+    }
+    if (signal) signal.addEventListener('abort', abortListener, { once: true });
+
     let parsedUrl;
     try {
       parsedUrl = new URL(audioUrl);
     } catch (error) {
-      reject(new Error('URL directa de audio inválida'));
+      finish(new Error('URL directa de audio inválida'));
       return;
     }
 
     if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      reject(new Error('La URL directa de audio debe usar http o https'));
+      finish(new Error('La URL directa de audio debe usar http o https'));
       return;
     }
 
     const transport = parsedUrl.protocol === 'https:' ? https : http;
-    const request = transport.get(parsedUrl, { headers: buildRequestHeaders(headers) }, (response) => {
+    request = transport.get(parsedUrl, { headers: buildRequestHeaders(headers) }, (incomingResponse) => {
+      response = incomingResponse;
       if ([301, 302, 303, 307, 308].includes(response.statusCode) && response.headers.location) {
         response.resume();
         if (redirectCount >= 3) {
-          reject(new Error('Demasiadas redirecciones al descargar audio'));
+          finish(new Error('Demasiadas redirecciones al descargar audio'));
           return;
         }
         const redirectedUrl = new URL(response.headers.location, parsedUrl).toString();
-        downloadUrlToFile(redirectedUrl, targetPath, headers, timeoutMs, redirectCount + 1, onProgress).then(resolve).catch(reject);
+        downloadUrlToFile(
+          redirectedUrl,
+          targetPath,
+          headers,
+          timeoutMs,
+          redirectCount + 1,
+          onProgress,
+          signal
+        ).then(() => finish()).catch(finish);
         return;
       }
 
-      if (response.statusCode < 200 || response.statusCode >= 300) {
+      // A cache entry must contain the complete resource, never an HTTP range.
+      if (response.statusCode !== 200) {
         response.resume();
-        reject(new Error(`La URL de audio respondió con HTTP ${response.statusCode}`));
+        finish(new Error(`La URL de audio respondió con HTTP ${response.statusCode}`));
         return;
       }
 
-      const writeStream = fs.createWriteStream(targetPath);
+      writeStream = fs.createWriteStream(targetPath);
       const totalBytes = Number(response.headers['content-length'] || 0);
       let downloadedBytes = 0;
 
@@ -1319,24 +2047,26 @@ function downloadUrlToFile(audioUrl, targetPath, headers = {}, timeoutMs = 60000
           });
         }
       });
-
+      response.on('error', finish);
       response.pipe(writeStream);
 
       writeStream.on('finish', () => {
-        writeStream.close(() => resolve(true));
+        writeStream.close(() => {
+          if (!response.complete || (totalBytes > 0 && downloadedBytes !== totalBytes)) {
+            finish(new Error('La descarga de audio quedó incompleta'));
+          } else finish();
+        });
       });
-
       writeStream.on('error', (error) => {
-        response.destroy();
-        reject(error);
+        if (response && !response.destroyed) response.destroy(error);
+        finish(error);
       });
     });
 
     request.setTimeout(timeoutMs, () => {
       request.destroy(new Error(`Timeout: La descarga de audio superó ${Math.round(timeoutMs / 1000)} segundos`));
     });
-
-    request.on('error', reject);
+    request.on('error', finish);
   });
 }
 
@@ -1345,6 +2075,7 @@ function cleanupPartialCacheFiles(cacheBase) {
     if (!cacheBase || !fs.existsSync(cacheBase)) return;
     fs.readdirSync(cacheBase)
       .filter(name => name.endsWith('.part'))
+      .filter(name => ![...audioCacheJobs.values()].some(job => job.writeTargetPath === path.join(cacheBase, name)))
       .forEach(name => {
         try {
           fs.unlinkSync(path.join(cacheBase, name));
@@ -1358,14 +2089,33 @@ function cleanupPartialCacheFiles(cacheBase) {
 }
 
 async function cacheExtractedAudio(extraction, outPath, cacheSettings, cacheBase, onProgress = null) {
-  if (audioCacheJobs.has(outPath)) {
-    return audioCacheJobs.get(outPath);
+  const runningJob = audioCacheJobs.get(outPath);
+  if (runningJob) return runningJob.promise;
+
+  if (audioCacheClearPromise) {
+    throw createAudioCacheClearedError();
   }
 
+  const controller = new AbortController();
+  const expectedCacheGeneration = audioCacheGeneration;
   const writeTargetPath = `${outPath}.${Date.now()}-${crypto.randomBytes(4).toString('hex')}.part`;
-  const job = (async () => {
+  let job;
+
+  job = (async () => {
     try {
-      await downloadUrlToFile(extraction.audioUrl, writeTargetPath, extraction.httpHeaders || {}, 60000, 0, onProgress);
+      await downloadUrlToFile(
+        extraction.audioUrl,
+        writeTargetPath,
+        extraction.httpHeaders || {},
+        60000,
+        0,
+        onProgress,
+        controller.signal
+      );
+
+      if (controller.signal.aborted || expectedCacheGeneration !== audioCacheGeneration) {
+        throw createAudioCacheClearedError();
+      }
 
       const stats = fs.statSync(writeTargetPath);
       if (!stats.isFile() || stats.size < 32768) {
@@ -1374,6 +2124,10 @@ async function cacheExtractedAudio(extraction, outPath, cacheSettings, cacheBase
       }
 
       try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch (cleanupError) {}
+      if (controller.signal.aborted || expectedCacheGeneration !== audioCacheGeneration) {
+        throw createAudioCacheClearedError();
+      }
+
       fs.renameSync(writeTargetPath, outPath);
       pruneCache(cacheBase, cacheSettings.maxSizeMB);
       return outPath;
@@ -1381,12 +2135,65 @@ async function cacheExtractedAudio(extraction, outPath, cacheSettings, cacheBase
       try { if (fs.existsSync(writeTargetPath)) fs.unlinkSync(writeTargetPath); } catch (cleanupError) {}
       throw error;
     } finally {
-      audioCacheJobs.delete(outPath);
+      if (audioCacheJobs.get(outPath)?.promise === job) {
+        audioCacheJobs.delete(outPath);
+      }
     }
   })();
 
-  audioCacheJobs.set(outPath, job);
+  audioCacheJobs.set(outPath, {
+    promise: job,
+    writeTargetPath,
+    abort: () => controller.abort()
+  });
   return job;
+}
+
+async function clearAudioCache() {
+  if (audioCacheClearPromise) return audioCacheClearPromise;
+
+  const operation = (async () => {
+    const activeJobs = [...audioCacheJobs.values()];
+    audioCacheGeneration += 1;
+    activeJobs.forEach((job) => job.abort?.());
+    audioCacheJobs.clear();
+
+    // Give aborted writers a chance to close their file handles before the
+    // directory is removed. This prevents a background download from
+    // recreating a file after the user empties the cache.
+    await Promise.allSettled(activeJobs.map((job) => job.promise));
+
+    const dir = getAudioCacheDirectory();
+    try {
+      if (fs.existsSync(dir)) {
+        fs.rmSync(dir, {
+          recursive: true,
+          force: true,
+          maxRetries: 6,
+          retryDelay: 150
+        });
+      }
+
+      if (fs.existsSync(dir)) {
+        throw new Error('No se pudo eliminar completamente la carpeta de caché');
+      }
+
+      await dbRun('DELETE FROM audio_cache_metadata');
+      return { ok: true, cancelledJobs: activeJobs.length };
+    } catch (error) {
+      console.error('No se pudo vaciar la caché de audio:', error);
+      return {
+        ok: false,
+        cancelledJobs: activeJobs.length,
+        error: error.message || 'No se pudo vaciar la caché de audio'
+      };
+    }
+  })();
+
+  audioCacheClearPromise = operation.finally(() => {
+    audioCacheClearPromise = null;
+  });
+  return audioCacheClearPromise;
 }
 
 // Implementación de búsqueda
@@ -1412,6 +2219,41 @@ ipcMain.handle('search-songs', async (event, query) => {
     console.error('Error detallado en la búsqueda:', error.stack);
     throw new Error(`No se pudo buscar canciones: ${error.message}`);
   }
+});
+
+const collectionReadJobs = new Map();
+ipcMain.on('collection:cancel-read', (event, id) => {
+  if (mainWindow && event.sender === mainWindow.webContents) collectionReadJobs.get(id)?.abort();
+});
+async function withCollectionRead(id, operation) {
+  if (typeof id !== 'string' || !/^[a-f0-9-]{36}$/i.test(id)) throw new Error('Identificador de importación no válido');
+  if (collectionReadJobs.size >= 2) throw new Error('Ya hay una lectura de colección en curso');
+  const controller = new AbortController();
+  collectionReadJobs.set(id, controller);
+  try { return await operation(controller.signal); }
+  finally { if (collectionReadJobs.get(id) === controller) collectionReadJobs.delete(id); }
+}
+ipcMain.handle('spotify:read-collection', async (event, rawUrl, readId) => {
+  requireMainWindowSender(event);
+  ensureInternetAccess('Importar desde Spotify');
+  const url = new URL(String(rawUrl));
+  if (url.origin !== 'https://open.spotify.com' || !/^\/(playlist|album|track)\/[a-zA-Z0-9]+$/.test(url.pathname)) throw new Error('URL de Spotify no válida');
+  const { fetchSpotifyPage } = require('./services/publicCollection');
+  return withCollectionRead(readId, async signal => {
+  const responses = await Promise.allSettled([
+    fetchSpotifyPage(url.href, 0, signal), fetchSpotifyPage(`https://open.spotify.com/embed${url.pathname}`, 0, signal)
+  ]);
+  const pages = responses.filter(result => result.status === 'fulfilled').map(result => result.value);
+  if (!pages.length) throw new Error('No se pudo leer Spotify. Comprueba que la colección sea pública.');
+  return pages;
+  });
+});
+ipcMain.handle('youtube:read-collection', async (event, rawUrl, readId) => {
+  requireMainWindowSender(event);
+  ensureInternetAccess('Importar desde YouTube');
+  const url = new URL(String(rawUrl));
+  if (url.origin !== 'https://www.youtube.com' || url.pathname !== '/playlist' || !/^[A-Za-z0-9_-]+$/.test(url.searchParams.get('list') || '')) throw new Error('URL de YouTube no válida');
+  return withCollectionRead(readId, signal => ytdlpService.getPlaylistDetails(url.href, { signal }));
 });
 
 ipcMain.handle('fetch-spotify-playlist-html', async (event, playlistUrl) => {
@@ -1532,8 +2374,11 @@ ipcMain.handle('fetch-youtube-oembed', async (event, videoId) => {
 
 // Streaming mejorado
 ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => {
+  requireMainWindowSender(event);
   const playbackStartedAt = Date.now();
   const requestId = options.requestId || `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const extractorMode = audioExtractorPreference;
+  const expectedDataGeneration = applicationDataGeneration;
   const progress = (payload) => sendPlaybackProgress(event.sender, {
     requestId,
     elapsedMs: Date.now() - playbackStartedAt,
@@ -1542,15 +2387,16 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
 
   progress({
     stage: 'start',
-    message: `Preparando audio (${audioExtractorPreference})`
+    message: `Preparando audio (${extractorMode})`
   });
   console.log(`Transmitiendo canción desde: ${videoUrl}`);
   try {
     if (!videoUrl) {
       throw new Error('URL de video no proporcionada');
     }
-    validateMediaUrl(videoUrl);
+    validateMediaUrl(videoUrl, extractorMode);
     const forceRefresh = !!options.forceRefresh;
+    const resolutionController = beginPlaybackResolution(requestId, videoUrl, quality || 'medium', extractorMode);
 
     // Destruir y eliminar el archivo del flujo anterior
     if (currentStream) {
@@ -1570,13 +2416,13 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
     console.log('Obteniendo información del video...');
     progress({ stage: 'cache-check', message: 'Revisando caché local' });
     const cacheSettings = await getCacheSettings();
-    const cacheBase = path.join(app.getPath('userData'), 'audio_cache');
+    const cacheBase = getAudioCacheDirectory();
     try { if (!fs.existsSync(cacheBase)) fs.mkdirSync(cacheBase); } catch(e) {}
     cleanupPartialCacheFiles(cacheBase);
 
     const cachedVideoId = getVideoId(videoUrl);
     const allCacheCandidates = cachedVideoId
-      ? ['m4a', 'mp4', 'mp3', 'webm'].map(ext => path.join(cacheBase, `${cachedVideoId}.${ext}`))
+      ? AUDIO_CACHE_EXTENSIONS.map(ext => path.join(cacheBase, `${cachedVideoId}.${ext}`))
       : [];
     if (forceRefresh) {
       allCacheCandidates.forEach(candidate => {
@@ -1605,7 +2451,7 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
 
     if (earlyReusableCachePath) {
       const trackData = await buildCachedTrackData(cachedVideoId, videoUrl, quality, earlyReusableCachePath);
-      updatePlaybackHistory(trackData);
+      updatePlaybackHistory(trackData, expectedDataGeneration);
       progress({ stage: 'ready', source: 'cache', message: 'Usando audio cacheado' });
       return { path: earlyReusableCachePath, metadata: trackData };
     }
@@ -1613,17 +2459,21 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
     ensureInternetAccess('El streaming');
 
     const extractionResult = await getOrExtractAudio(videoUrl, {
-      mode: audioExtractorPreference,
+      mode: extractorMode,
       quality: quality || 'medium',
       timeoutMs: 30000,
       logger: console,
       requestId,
+      manualFormatId: options.manualFormatId,
+      signal: resolutionController.signal,
+      metadataCacheEnabled: cacheSettings.enabled,
       onProgress: (payload) => progress({
         stage: 'extractor',
           ...payload
       })
     }, { forceRefresh });
     const extraction = prepareExtractionForPlayback(extractionResult.extraction, extractionResult.fromMemoryCache);
+    throwIfPlaybackAborted(resolutionController.signal);
     if (extractionResult.fromMemoryCache) {
       progress({
         stage: 'extractor',
@@ -1636,20 +2486,27 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
     }
 
     const extractedTrackData = extraction.metadata;
+
     const extractedVideoId = extractedTrackData.id || cachedVideoId;
     const extractedExt = getAudioExtensionFromExtraction(extraction);
-    const playbackPath = createAudioProxyUrl(extraction);
+    throwIfPlaybackAborted(resolutionController.signal);
+    const playbackPath = createAudioProxyUrl(extraction, {
+      requestId,
+      videoUrl,
+      quality: quality || 'medium',
+      extractorMode
+    });
 
     console.log(
-      `[audio-extractor] preferencia=${audioExtractorPreference} usado=${extraction.extractor} fallback=${!!extraction.usedFallback} tiempo=${extraction.extractionMs}ms`
+      `[audio-extractor] preferencia=${extractorMode} usado=${extraction.extractor} fallback=${!!extraction.usedFallback} tiempo=${extraction.extractionMs}ms`
     );
 
     console.log('Actualizando historial de reproducción...');
-    updatePlaybackHistory(extractedTrackData);
+    updatePlaybackHistory(extractedTrackData, expectedDataGeneration);
 
     console.log('Generando recomendaciones en segundo plano...');
     progress({ stage: 'history', message: 'Historial actualizado; recomendaciones en segundo plano' });
-    generateRecommendations(extractedTrackData.artist).catch((recommendationError) => {
+    generateRecommendations(extractedTrackData.artist, expectedDataGeneration).catch((recommendationError) => {
       console.warn('No se pudieron generar recomendaciones en segundo plano:', recommendationError.message);
       progress({
         stage: 'recommendations-error',
@@ -1657,9 +2514,25 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
       });
     });
 
-    if (cacheSettings.enabled && extractedVideoId) {
+    if (
+      cacheSettings.enabled
+      && extractedVideoId
+      && !audioCacheClearPromise
+      && expectedDataGeneration === applicationDataGeneration
+       && isPersistentAudioCacheAllowed(extraction)
+    ) {
       const outPath = path.join(cacheBase, `${extractedVideoId}.${extractedExt}`);
       const cacheAlreadyRunning = audioCacheJobs.has(outPath);
+      await saveAudioCacheMetadata(extractedTrackData, expectedDataGeneration).catch((error) => {
+        console.warn('No se pudo guardar metadata de la caché:', error.message);
+      });
+      if (expectedDataGeneration !== applicationDataGeneration || audioCacheClearPromise) {
+        return {
+          path: playbackPath,
+          metadata: extractedTrackData,
+          formats: extraction.formats
+        };
+      }
       console.log('Caché activa: reproduciendo por proxy local y guardando copia en segundo plano con:', extraction.extractor);
       progress({
         stage: 'ready',
@@ -1692,6 +2565,7 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
         });
         console.log('Caché de audio guardada:', finalPath);
       }).catch((cacheError) => {
+        if (isAudioCacheClearedError(cacheError)) return;
         progress({
           stage: 'cache-error',
           message: `No se pudo guardar caché: ${cacheError.message}`
@@ -1725,6 +2599,8 @@ ipcMain.handle('stream-song', async (event, videoUrl, quality, options = {}) => 
       message: error.message
     });
     throw error;
+  } finally {
+    finishPlaybackResolution(requestId);
   }
 });
 
@@ -1750,7 +2626,7 @@ function setCacheSettings(settings) {
 
 function pruneCache(dir, maxMB) {
   try {
-    const files = fs.readdirSync(dir).map(name => {
+    const files = fs.readdirSync(dir).filter(name => AUDIO_CACHE_EXTENSIONS.some(ext => name.endsWith(`.${ext}`))).map(name => {
       const p = path.join(dir, name);
       const s = fs.statSync(p);
       return { p, mtime: s.mtimeMs, size: s.size };
@@ -1767,6 +2643,11 @@ function pruneCache(dir, maxMB) {
 
 ipcMain.handle('set-cache-settings', async (event, settings) => {
   await setCacheSettings(settings || {});
+  if (!settings?.enabled) {
+    audioCacheGeneration += 1;
+    for (const job of audioCacheJobs.values()) job.abort();
+    audioCacheJobs.clear();
+  }
   return true;
 });
 
@@ -1775,17 +2656,11 @@ ipcMain.handle('get-cache-settings', async () => {
 });
 
 ipcMain.handle('clear-audio-cache', async () => {
-  const dir = path.join(app.getPath('userData'), 'audio_cache');
-  try {
-    if (fs.existsSync(dir)) {
-      for (const f of fs.readdirSync(dir)) {
-        try { fs.unlinkSync(path.join(dir, f)); } catch(e) {}
-      }
-    }
-    return true;
-  } catch(e) {
-    return false;
+  const result = await clearAudioCache();
+  if (result?.ok && turboEngine) {
+    await turboEngine.clearMetadataCache();
   }
+  return result;
 });
 
 ipcMain.handle('get-audio-cache-library', async () => {
@@ -1793,30 +2668,55 @@ ipcMain.handle('get-audio-cache-library', async () => {
 });
 
 ipcMain.handle('proxy-audio-url', async (event, payload = {}) => {
+  requireMainWindowSender(event);
   const audioUrl = typeof payload === 'string' ? payload : payload.audioUrl;
-  const httpHeaders = typeof payload === 'object' && payload ? payload.httpHeaders || {} : {};
+  const httpHeaders = sanitizeRendererProxyHeaders(typeof payload === 'object' && payload ? payload.httpHeaders : {});
   validateProxyableAudioUrl(audioUrl);
   return createAudioProxyUrl({ audioUrl, httpHeaders });
 });
 
 ipcMain.handle('preload-song', async (event, videoUrl, quality, options = {}) => {
+  requireMainWindowSender(event);
   try {
     if (!videoUrl) return { ok: false, error: 'URL de video no proporcionada' };
-    validateMediaUrl(videoUrl);
+    validateMediaUrl(videoUrl, options.extractorMode || audioExtractorPreference);
 
     const requestedQuality = quality || 'medium';
     const extractorMode = normalizeExtractorMode(options.extractorMode || audioExtractorPreference);
-    const cacheKey = getMemoryStreamCacheKey(videoUrl, requestedQuality, extractorMode);
+    const cacheKey = getMemoryStreamCacheKey(videoUrl, requestedQuality, extractorMode, options.manualFormatId);
     const cachedExtraction = getMemoryCachedExtraction(cacheKey);
     if (cachedExtraction) {
       return { ok: true, source: 'memory', extractor: cachedExtraction.extractor };
     }
 
     const cacheSettings = await getCacheSettings();
-    const cacheBase = path.join(app.getPath('userData'), 'audio_cache');
+
+    if (extractorMode === 'lte') {
+      const videoId = getVideoId(videoUrl);
+      const cachedPath = cacheSettings.enabled && videoId
+        ? getPlayableCachePath(AUDIO_CACHE_EXTENSIONS.map(ext => path.join(getAudioCacheDirectory(), `${videoId}.${ext}`)))
+        : null;
+      if (cachedPath) return { ok: true, source: 'cache', extractor: 'cache' };
+      if (!networkAccessEnabled) return { ok: false, error: 'Acceso a internet desactivado' };
+      const preload = await getTurboEngineInstance().preload(videoUrl, {
+        quality: requestedQuality,
+        manualFormatId: options.manualFormatId,
+        requestId: options.requestId || `preload-${Date.now()}`,
+        metadataCacheEnabled: cacheSettings.enabled
+      });
+      return {
+        ok: preload.ok === true,
+        source: preload.ok ? 'turbo-memory' : null,
+        extractor: 'lte',
+        code: preload.code,
+        error: preload.error
+      };
+    }
+
+    const cacheBase = getAudioCacheDirectory();
     const cachedVideoId = getVideoId(videoUrl);
     const allCacheCandidates = cachedVideoId
-      ? ['m4a', 'mp4', 'mp3', 'webm'].map(ext => path.join(cacheBase, `${cachedVideoId}.${ext}`))
+      ? AUDIO_CACHE_EXTENSIONS.map(ext => path.join(cacheBase, `${cachedVideoId}.${ext}`))
       : [];
     const reusableCachePath = cacheSettings.enabled ? getPlayableCachePath(allCacheCandidates) : null;
     if (reusableCachePath) {
@@ -1835,9 +2735,11 @@ ipcMain.handle('preload-song', async (event, videoUrl, quality, options = {}) =>
     const job = extractAudio(videoUrl, {
       mode: extractorMode,
       quality: requestedQuality,
+      manualFormatId: options.manualFormatId,
       timeoutMs: Number(options.timeoutMs || 20000),
       logger: console,
-      requestId: options.requestId || `preload-${Date.now()}`
+      requestId: options.requestId || `preload-${Date.now()}`,
+      preload: extractorMode === 'lse'
     }).then((extraction) => {
       storeMemoryStreamExtraction(cacheKey, extraction);
       console.log('[audio-preload] stream precargado:', cacheKey);
@@ -1855,18 +2757,198 @@ ipcMain.handle('preload-song', async (event, videoUrl, quality, options = {}) =>
   }
 });
 
-ipcMain.handle('get-audio-extractor', async () => {
+ipcMain.handle('get-audio-extractor', async (event) => {
+  // Kept as a handler for the existing settings UI; configuration may only be
+  // read by the application window, not an arbitrary renderer.
+  requireMainWindowSender(event);
   return audioExtractorPreference;
 });
 
 ipcMain.handle('set-audio-extractor', async (event, extractorMode) => {
+  requireMainWindowSender(event);
   audioExtractorPreference = normalizeExtractorMode(extractorMode);
   store.set('audioExtractor', audioExtractorPreference);
   console.log('[audio-extractor] preferencia guardada:', audioExtractorPreference);
   return audioExtractorPreference;
 });
 
+ipcMain.handle('lte:get-settings', (event) => {
+  requireMainWindowSender(event);
+  return { settings: getTurboSettings() };
+});
+
+ipcMain.handle('lte:update-settings', (event, patch) => {
+  requireMainWindowSender(event);
+  return { settings: updateTurboSettings(patch) };
+});
+
+ipcMain.handle('lte:reset-settings', (event) => {
+  requireMainWindowSender(event);
+  const settings = getTurboEngineInstance().resetSettings();
+  store.set('turboSettings', settings);
+  return { settings };
+});
+
+ipcMain.handle('lte:get-diagnostics', async (event) => {
+  requireMainWindowSender(event);
+  return getTurboDiagnostics();
+});
+
+ipcMain.handle('lte:check-dependencies', async (event) => {
+  requireMainWindowSender(event);
+  await getTurboEngineInstance().checkDependencies();
+  return getTurboDiagnostics();
+});
+
+ipcMain.handle('lte:clear-metadata-cache', async (event) => {
+  requireMainWindowSender(event);
+  return getTurboEngineInstance().clearMetadataCache();
+});
+
+ipcMain.handle('lte:cancel-preloads', (event) => {
+  requireMainWindowSender(event);
+  return { cancelled: getTurboEngineInstance().cancelAllPreloads() };
+});
+
+ipcMain.handle('lte:run-benchmark', async (event, videoUrl, options = {}) => {
+  requireMainWindowSender(event);
+  return runTurboBenchmark(videoUrl, options);
+});
+
+ipcMain.handle('lte:cancel-benchmark', (event) => {
+  requireMainWindowSender(event);
+  if (!activeTurboBenchmark) return { cancelled: false };
+  try { activeTurboBenchmark.controller.abort('Benchmark cancelado por el usuario'); } catch (error) {}
+  return { cancelled: true };
+});
+
+ipcMain.handle('lte:report-playback-event', async (event, playbackEvent, payload = {}) => {
+  requireMainWindowSender(event);
+  const allowedEvents = new Set(['first-audio', 'playing', 'buffering', 'waiting', 'stalled', 'loadstart', 'canplay', 'metadata-ready', 'media-error', 'error']);
+  const normalizedEvent = allowedEvents.has(playbackEvent) ? playbackEvent : 'error';
+  const safePayload = {
+    requestId: String(payload?.requestId || '').slice(0, 96),
+    currentTime: Math.max(0, Number(payload?.currentTime || 0)),
+    durationMs: Math.max(0, Math.min(600000, Number(payload?.durationMs || 0)))
+  };
+  getTurboEngineInstance().reportPlaybackEvent(normalizedEvent, safePayload);
+  return getTurboDiagnostics();
+});
+
+ipcMain.handle('lte:export-settings', (event) => {
+  requireMainWindowSender(event);
+  return { format: 'lunera-lte-settings', version: 1, settings: getTurboSettings() };
+});
+
+ipcMain.handle('lte:export-diagnostics', async (event) => {
+  requireMainWindowSender(event);
+  return getTurboDiagnostics();
+});
+
+// LSE mantiene su configuración en Main: el renderer recibe copias sanitizadas
+// y nunca decide destinos de red ni rutas de caché directamente.
+ipcMain.handle('lse:get-settings', (event) => {
+  requireMainWindowSender(event);
+  return { settings: getLseSettings() };
+});
+
+ipcMain.handle('lse:update-settings', async (event, patch) => {
+  requireMainWindowSender(event);
+  return { settings: await updateLseSettings(patch) };
+});
+
+ipcMain.handle('lse:reset-settings', async (event) => {
+  requireMainWindowSender(event);
+  const engine = getLseEngineInstance();
+  const settings = engine.resetSettings();
+  engine.getExtractorStatus().forEach((extractor) => {
+    if (extractor.enabled === false) engine.setExtractorEnabled(extractor.id, true);
+  });
+  store.set('lseSettings', settings);
+  store.delete('lseExtractorStates');
+  return { settings, extractors: engine.getExtractorStatus() };
+});
+
+ipcMain.handle('lse:clear-cache', async (event) => {
+  requireMainWindowSender(event);
+  const engine = getLseEngineInstance();
+  const before = engine.getStats().metadataCache.entries;
+  const stats = await engine.clearCache();
+  return { ok: true, removed: before, stats };
+});
+
+ipcMain.handle('lse:get-diagnostics', (event) => {
+  requireMainWindowSender(event);
+  return getLseEngineInstance().getDiagnostics();
+});
+
+ipcMain.handle('lse:get-extractors', (event) => {
+  requireMainWindowSender(event);
+  return { extractors: getLseEngineInstance().getExtractorStatus() };
+});
+
+ipcMain.handle('lse:set-extractor-enabled', (event, id, enabled) => {
+  requireMainWindowSender(event);
+  const status = getLseEngineInstance().setExtractorEnabled(id, enabled !== false);
+  const persisted = store.get('lseExtractorStates', {});
+  store.set('lseExtractorStates', { ...(persisted && typeof persisted === 'object' ? persisted : {}), [status.id]: status.enabled });
+  return { status, extractors: getLseEngineInstance().getExtractorStatus() };
+});
+
+ipcMain.handle('lse:cancel-preloads', (event) => {
+  requireMainWindowSender(event);
+  return { cancelled: getLseEngineInstance().cancelAllPreloads() };
+});
+
+ipcMain.handle('lse:report-audible-start', (event, payload = {}) => {
+  requireMainWindowSender(event);
+  const engine = getLseEngineInstance();
+  engine.recordPlaybackEvent('first-audio', {
+    requestId: String(payload?.requestId || '').slice(0, 96),
+    currentTime: Number(payload?.currentTime || 0)
+  });
+  return engine.getDiagnostics();
+});
+
+ipcMain.handle('lse:report-buffering', (event, payload = {}) => {
+  requireMainWindowSender(event);
+  const engine = getLseEngineInstance();
+  engine.recordPlaybackEvent('buffering', {
+    requestId: String(payload?.requestId || '').slice(0, 96),
+    durationMs: Math.max(0, Math.min(600000, Number(payload?.durationMs || 0)))
+  });
+  return engine.getDiagnostics();
+});
+
+ipcMain.handle('lse:export-settings', (event) => {
+  requireMainWindowSender(event);
+  return {
+    format: 'lunera-lse-settings',
+    version: 1,
+    settings: getLseSettings(),
+    extractorStates: store.get('lseExtractorStates', {})
+  };
+});
+
+ipcMain.handle('lse:export-diagnostics', (event) => {
+  requireMainWindowSender(event);
+  // getDiagnostics ya devuelve detalles depurados por LSE; no se exportan
+  // cookies, cabeceras de autorización ni URLs temporales completas.
+  return getLseEngineInstance().getDiagnostics();
+});
+
+ipcMain.handle('lse:import-settings', async (event, payload) => {
+  requireMainWindowSender(event);
+  const candidate = payload?.settings && typeof payload.settings === 'object'
+    ? payload.settings
+    : payload;
+  const settings = await updateLseSettings(candidate);
+  const extractors = applyLseExtractorStates(payload?.extractorStates);
+  return { settings, extractors };
+});
+
 ipcMain.handle('get-audio-formats', async (event, videoUrl, quality) => {
+  requireMainWindowSender(event);
   ensureInternetAccess('La extracción de formatos');
   const extraction = await extractAudio(videoUrl, {
     mode: audioExtractorPreference,
@@ -1884,6 +2966,7 @@ ipcMain.handle('get-audio-formats', async (event, videoUrl, quality) => {
 });
 
 ipcMain.handle('extract-playlist', async (event, playlistUrl) => {
+  requireMainWindowSender(event);
   ensureInternetAccess('La extracción de playlists');
   return extractPlaylist(playlistUrl, {
     mode: audioExtractorPreference,
@@ -1966,6 +3049,15 @@ ipcMain.handle('get-home-data', async () => {
         
         resolve(data);
       });
+    });
+  });
+});
+
+ipcMain.handle('clear-listening-history', async () => {
+  return new Promise((resolve, reject) => {
+    db.run('DELETE FROM recently_played', function(err) {
+      if (err) return reject(err);
+      resolve({ ok: true, deleted: this.changes || 0 });
     });
   });
 });
@@ -2164,45 +3256,118 @@ ipcMain.handle('set-visual-settings', (event, settings) => {
   });
 });
 
-// Borrar todos los datos
-ipcMain.handle('delete-all-data', async () => {
-  console.log('Borrando todos los datos de la base de datos');
-  const statements = [
-    'DELETE FROM recently_played',
-    'DELETE FROM recommendations',
-    'DELETE FROM library',
-    'DELETE FROM playlist_songs',
-    'DELETE FROM playlists',
-    'DELETE FROM settings',
-    'DELETE FROM local_music'
-  ];
-
+function runResetStatements(statements) {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
-      let index = 0;
+      db.run('BEGIN IMMEDIATE TRANSACTION', (beginError) => {
+        if (beginError) return reject(beginError);
 
-      const runNext = () => {
-        if (index >= statements.length) {
-          console.log('Todas las tablas han sido vaciadas');
-          resolve(true);
-          return;
-        }
-
-        const sql = statements[index++];
-        db.run(sql, (err) => {
-          if (err) {
-            console.error(`Error al ejecutar "${sql}":`, err);
-            reject(err);
+        let index = 0;
+        const rollback = (error) => {
+          db.run('ROLLBACK', () => reject(error));
+        };
+        const runNext = () => {
+          if (index >= statements.length) {
+            db.run('COMMIT', (commitError) => {
+              if (commitError) return rollback(commitError);
+              resolve();
+            });
             return;
           }
 
-          runNext();
-        });
-      };
+          const sql = statements[index++];
+          db.run(sql, (error) => {
+            if (error) return rollback(error);
+            runNext();
+          });
+        };
 
-      runNext();
+        runNext();
+      });
     });
   });
+}
+
+function clearTransientAudioState() {
+  cancelActivePlaybackResolution('Limpieza de datos temporales');
+  if (currentStream) {
+    try { currentStream.destroy(); } catch (error) {}
+    currentStream = null;
+  }
+
+  try { activeTurboBenchmark?.controller?.abort('Benchmark cancelled during cleanup'); } catch (error) {}
+  for (const [token, entry] of audioProxyEntries) releaseAudioProxyEntry(token, entry);
+  memoryStreamCache.clear();
+  memoryStreamPreloadJobs.clear();
+  lseEngine?.cancelAllPreloads?.();
+  turboEngine?.cancelAllPreloads?.();
+}
+
+// Borrar todos los datos, incluida la caché física de audio.
+ipcMain.handle('delete-all-data', async () => {
+  console.log('Restableciendo todos los datos de la aplicación');
+  applicationDataGeneration += 1;
+  clearTransientAudioState();
+
+  const cacheResult = await clearAudioCache();
+  if (!cacheResult.ok) {
+    return {
+      ok: false,
+      error: cacheResult.error || 'No se pudo eliminar la caché de audio'
+    };
+  }
+
+  const statements = [
+    'DELETE FROM recently_played',
+    'DELETE FROM recommendations',
+    'DELETE FROM favorites',
+    'DELETE FROM playlist_songs',
+    'DELETE FROM playlists',
+    'DELETE FROM library',
+    'DELETE FROM settings',
+    'DELETE FROM local_music',
+    'DELETE FROM audio_cache_metadata'
+  ];
+
+  try {
+    await runResetStatements(statements);
+    store.clear();
+    // Do not re-import the legacy seed data on the next launch.
+    store.set(LEGACY_USER_DATA_MIGRATION_KEY, true);
+    networkAccessEnabled = true;
+    audioExtractorPreference = 'lte';
+    store.set('audioExtractor', audioExtractorPreference);
+    if (turboEngine) {
+      await turboEngine.clearMetadataCache();
+      store.set('turboSettings', turboEngine.resetSettings());
+    }
+    if (lseEngine) {
+      await lseEngine.clearCache();
+      store.set('lseSettings', lseEngine.resetSettings());
+      lseEngine.getExtractorStatus().forEach((extractor) => {
+        if (extractor.enabled === false) lseEngine.setExtractorEnabled(extractor.id, true);
+      });
+    }
+    store.delete('lseExtractorStates');
+    latestPlayerState = {
+      isPlaying: false,
+      playerUiState: 'empty',
+      title: null,
+      artist: null,
+      thumbnail: null,
+      volume: 1,
+      muted: false,
+      currentTime: 0,
+      duration: 0,
+      accentColor: '#1db954'
+    };
+
+    console.log('Restablecimiento completo finalizado');
+    return { ok: true, cache: cacheResult };
+  } catch (error) {
+    console.error('No se pudo restablecer la base de datos:', error);
+    return { ok: false, error: error.message || 'No se pudo restablecer la aplicación' };
+  }
 });
 
 ipcMain.handle('add-to-favorites', async (event, song) => {
@@ -2335,29 +3500,64 @@ ipcMain.handle('get-local-music-file', (event, videoId) => {
   });
 });
 
-ipcMain.handle('remove-local-music', (event, videoId) => {
-  console.log(`Eliminando música local: ${videoId}`);
+ipcMain.handle('remove-local-music', (event, identifier) => {
+  console.log(`Eliminando música local: ${identifier}`);
   return new Promise((resolve, reject) => {
-    db.run('DELETE FROM local_music WHERE video_id = ?', [videoId], (err) => {
+    db.run('DELETE FROM local_music WHERE video_id = ? OR id = ?', [identifier, identifier], function(err) {
       if (err) return reject(err);
-      resolve(true);
+      resolve({ ok: true, deleted: this.changes > 0 });
     });
   });
 });
 
 app.whenReady().then(async () => {
+  await initializeTurboEngine();
+  await initializeLseEngine();
   configureNetworkInterception();
   await startAudioProxyServer();
   migrateUserData();
   createWindow();
-  startAppUpdater({ app, dialog, getWindow: () => mainWindow, isNetworkEnabled: () => networkAccessEnabled });
+  gameOverlay = createGameOverlay({
+    getState: () => latestPlayerState,
+    onVisibility: visible => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('game-overlay:visibility', visible);
+    },
+    onControl: (action, value) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const channels = { toggle: 'player:toggle', previous: 'player:previous', next: 'player:next',
+        volume: 'player:set-volume', seek: 'player:seek-to', skip: 'player:skip-by' };
+      if (channels[action]) mainWindow.webContents.send(channels[action], value);
+    },
+    onPlay: track => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('game-overlay:play-track', track);
+    },
+    search: async query => {
+      ensureInternetAccess('La búsqueda');
+      const tracks = await searchVideosSafely(query);
+      return tracks.slice(0, 12).filter(track => /^[a-zA-Z0-9_-]{11}$/.test(track.id)).map(track => ({
+        id: track.id, title: track.original_title || track.title || 'Sin título', artist: track.artist || 'Desconocido',
+        duration: track.duration || 0, thumbnail: `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`,
+        url: `https://www.youtube.com/watch?v=${track.id}`
+      }));
+    }
+  });
+  appUpdaterController = startAppUpdater({
+    app,
+    getWindow: () => mainWindow,
+    isNetworkEnabled: () => networkAccessEnabled
+  });
 });
 
 app.on('before-quit', () => {
-  for (const entry of audioProxyEntries.values()) {
-    if (entry?.timeout) clearTimeout(entry.timeout);
-  }
-  audioProxyEntries.clear();
+  for (const controller of collectionReadJobs.values()) controller.abort();
+  collectionReadJobs.clear();
+  gameOverlay?.dispose();
+  gameOverlay = null;
+  try { activeTurboBenchmark?.controller?.abort('Application is closing'); } catch (error) {}
+  cancelActivePlaybackResolution('La aplicación se está cerrando');
+  for (const [token, entry] of audioProxyEntries) releaseAudioProxyEntry(token, entry);
+  lseEngine?.dispose?.();
+  turboEngine?.dispose?.();
 
   if (audioProxyServer) {
     audioProxyServer.close();
@@ -2418,6 +3618,13 @@ function setThumbarButtons(isPlaying) {
 
 ipcMain.handle('mini-player:set-enabled', async (event, enabled) => {
   return setMiniPlayerEnabled(!!enabled);
+});
+
+ipcMain.handle('game-overlay:toggle', event => {
+  requireMainWindowSender(event);
+  if (!gameOverlay) throw new Error('El overlay todavía no está listo');
+  gameOverlay.toggle();
+  return gameOverlay.getStatus();
 });
 
 ipcMain.handle('mini-player:get-enabled', async () => {
@@ -2485,6 +3692,7 @@ ipcMain.on('mini-player:control', (event, action, value) => {
 });
 
 ipcMain.on('player:state', (event, payload) => {
+  if (!mainWindow || event.sender !== mainWindow.webContents) return;
   const { isPlaying, title, artist } = payload || {};
   latestPlayerState = {
     ...latestPlayerState,
@@ -2492,6 +3700,7 @@ ipcMain.on('player:state', (event, payload) => {
     thumbnail: payload?.thumbnail || null
   };
   setThumbarButtons(!!isPlaying);
+  gameOverlay?.publish(latestPlayerState);
   sendMiniPlayerState(latestPlayerState);
   if (mainWindow) {
     const tip = [title, artist].filter(Boolean).join(' — ');

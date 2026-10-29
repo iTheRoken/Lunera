@@ -41,7 +41,8 @@ const playerState = {
   muted: false,
   currentTime: 0,
   duration: 0,
-  accentColor: '#1db954'
+  accentColor: '#1db954',
+  interfaceMode: 'classic'
 };
 
 let isSeeking = false;
@@ -166,6 +167,11 @@ function applyAccent(color) {
 
 function updateState(payload = {}) {
   Object.assign(playerState, payload);
+  if (playerState.interfaceMode === 'halloween') {
+    document.body.dataset.interfaceMode = 'halloween';
+  } else {
+    delete document.body.dataset.interfaceMode;
+  }
   applyAccent(playerState.accentColor);
   updateControls();
 }

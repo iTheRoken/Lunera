@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'none'; media-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>Lunera · Overlay</title>
+  <link rel="stylesheet" href="game-overlay.css">
+</head>
+<body>
+  <main class="overlay" aria-label="Overlay de Lunera">
+    <header class="header"><div class="brand"><span class="brand-mark">◒</span><div><strong>Lunera</strong><span>EN TU PARTIDA</span></div></div><button id="close" class="icon" aria-label="Cerrar overlay" title="Cerrar · Esc">×</button></header>
+    <section class="now-playing" aria-label="Reproducción actual">
+      <div class="art"><img id="artwork" alt="" hidden><span class="art-placeholder">♫</span><span class="equalizer"><i></i><i></i><i></i><i></i></span></div>
+      <span id="status" class="eyebrow">TU MÚSICA, SIEMPRE CERCA</span>
+      <h1 id="title">Elige tu próxima canción</h1><p id="artist">Busca algo para acompañar la partida</p>
+      <div class="timeline"><input id="seek" type="range" min="0" max="1" step="1" value="0" aria-label="Posición de la canción" disabled><div><span id="time">0:00</span><span id="duration">0:00</span></div></div>
+      <div class="controls"><button class="icon" data-action="previous" aria-label="Canción anterior" title="Anterior">|◀</button><button class="icon skip" data-skip="-10" aria-label="Retroceder 10 segundos">↶<small>10</small></button><button id="toggle" class="play" data-action="toggle" aria-label="Reproducir">▶</button><button class="icon skip" data-skip="10" aria-label="Adelantar 10 segundos">↷<small>10</small></button><button class="icon" data-action="next" aria-label="Canción siguiente" title="Siguiente">▶|</button></div>
+      <label class="volume"><span aria-hidden="true">◖))</span><input id="volume" type="range" min="0" max="1" step="0.01" value="1" aria-label="Volumen"><span id="volumeValue">100%</span></label>
+    </section>
+    <section class="discovery" aria-label="Buscar música"><form id="searchForm"><label class="search-box"><span aria-hidden="true">⌕</span><input id="query" type="search" placeholder="¿Qué quieres escuchar?" maxlength="160" minlength="2" autocomplete="off" aria-label="Buscar canción o artista"><button id="searchButton" type="submit" aria-label="Buscar">↵</button></label></form><p id="searchStatus" role="status">Busca una canción o un artista.</p><div id="results" class="results" aria-label="Resultados"></div></section>
+    <footer><span class="live-dot"></span><span>Tu partida sigue. Tu música también.</span><kbd>Ctrl + L</kbd></footer>
+  </main>
+  <script src="services/translations.js"></script>
+  <script src="game-overlay.js"></script>
+</body>
+</html>

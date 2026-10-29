@@ -26,9 +26,12 @@ let loadingSignals = [];
 let loadingAnimFrame = null;
 let loadingResizeHandler = null;
 let startupIntroTimer = null;
+let startupIntroExitTimer = null;
+let startupIntroFinished = false;
 let spectrogramResizeHandler = null;
 let spectrogramFrameId = null;
-const STARTUP_INTRO_DURATION_MS = 2000;
+const audioScenePainter = require('./services/audioScene').createAudioScene();
+const STARTUP_INTRO_DURATION_MS = 2200;
 
 function initLoadingBackground() {
   loadingCanvas = document.getElementById('loadingCanvas');
@@ -140,7 +143,7 @@ function stopLoadingBackground() {
 
 const FEEDBACK_FORM_URL = 'https://forms.gle/eFHx1ZnJy9Thf4KM9';
 const INTERFACE_MODE_STORAGE_KEY = 'luneraInterfaceMode';
-const VALID_INTERFACE_MODES = ['classic', 'neo'];
+const VALID_INTERFACE_MODES = ['classic', 'neo', 'halloween'];
 const EQ_FREQUENCIES = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
 const EQ_LABELS = ['60', '170', '310', '600', '1k', '3k', '6k', '12k', '14k', '16k'];
 const EQ_BAND_NAMES = ['Sub', 'Grave', 'Cuerpo', 'Calor', 'Medio', 'Presencia', 'Brillo', 'Aire', 'Lustre', 'Ultra'];
@@ -182,10 +185,15 @@ const LOCAL_ARTISTS_CATALOG = [
     name: 'Flawers A',
     initials: 'FA',
     style: 'flawers-a',
-    description: 'Tres lanzamientos para descubrir.',
+    description: 'Cuatro lanzamientos para descubrir.',
     channelUrl: 'https://www.youtube.com/@Flawers_A_music',
     profileImage: 'https://yt3.googleusercontent.com/OFuZkGEFbHZ2XoDzp2cf-BxjpQblhcycaq10G6qIL0x1-NwKowVQYwsP1TTqa4xq7RanRMbf_Q=s900-c-k-c0x00ffffff-no-rj',
     songs: [
+      {
+        id: '5cZUOnIVKEs',
+        title: 'Mi dama - Flawers A',
+        duration: '2:46'
+      },
       {
         id: 'qL1hsJkoJAE',
         title: 'El atardecer - Flawers A',
@@ -233,6 +241,7 @@ const state = {
     accentColor: '#1db954',
     interfaceMode: VALID_INTERFACE_MODES.includes(localStorage.getItem(INTERFACE_MODE_STORAGE_KEY)) ? localStorage.getItem(INTERFACE_MODE_STORAGE_KEY) : 'classic',
     spectrogramOpacity: 0.4,
+    spectrogramStyle: 'original',
     effectsIntensity: 70,
     panelOpacity: 92,
     animationQuality: 'balanced',
@@ -280,7 +289,7 @@ const state = {
     enabled: false,
     internetEnabled: true,
     verbosePlayerLogs: false,
-    audioExtractor: 'auto',
+    audioExtractor: 'lte',
     performanceMode: 'balanced',
     startAtLogin: false
   },
@@ -446,7 +455,7 @@ function renderPremiumSettingsShell() {
                 <div class="setting-icon"><i class="fas fa-layer-group"></i></div>
                 <div class="setting-info">
                   <h3>Interfaz de Lunera</h3>
-                  <p>Cambia entre la apariencia antigua y la nueva interfaz Neo</p>
+                  <p>Elige una identidad visual para Lunera, con una experiencia estacional completa.</p>
                 </div>
               </div>
               <div class="setting-control">
@@ -458,6 +467,10 @@ function renderPremiumSettingsShell() {
                   <button class="interface-mode-option" data-interface-mode="neo" type="button">
                     <i class="fas fa-wand-magic-sparkles"></i>
                     <span>Nueva Neo</span>
+                  </button>
+                  <button class="interface-mode-option interface-mode-option-halloween" data-interface-mode="halloween" type="button">
+                    <i class="fas fa-ghost"></i>
+                    <span>Halloween</span>
                   </button>
                 </div>
                 <div class="setting-inline-meta">
@@ -954,10 +967,10 @@ function renderPremiumSettingsShell() {
                 <div class="setting-icon"><i class="fas fa-trash-alt"></i></div>
                 <div class="setting-info">
                   <h3>Restablecer Aplicación</h3>
-                  <p>Elimina todas las playlists, canciones recientes y configuraciones</p>
+                  <p>Elimina playlists, historial, configuraciones y toda la caché de audio</p>
                 </div>
               </div>
-              <div class="setting-control"><button id="deleteAllDataBtn" class="modern-btn danger" type="button"><i class="fas fa-triangle-exclamation"></i><span>Borrar Todo</span></button></div>
+              <div class="setting-control"><button id="deleteAllDataBtn" class="modern-btn danger" type="button"><i class="fas fa-triangle-exclamation"></i><span>Restablecer y borrar datos</span></button></div>
             </article>
           </div>
         </section>
@@ -1083,11 +1096,12 @@ function renderPremiumSettingsShell() {
                   <label class="modern-switch"><input type="checkbox" id="verbosePlayerLogsToggle"><span class="switch-slider"></span></label>
                 </div>
                 <div class="developer-tool-item">
-                  <div><strong>Motor de extracción de audio</strong><p>Si un motor falla por cambios de YouTube, podés cambiar temporalmente al otro.</p></div>
+                  <div><strong>Motor de reproducción preferido</strong><p>Lunera Turbo Engine optimiza yt-dlp para iniciar música rápido; LSE queda disponible para fuentes directas y locales.</p></div>
                   <select id="audioExtractorSelect" class="modern-select">
-                    <option value="auto" selected>Automático recomendado</option>
-                    <option value="yt-dlp">yt-dlp</option>
-                    <option value="ytdl-core">ytdl-core</option>
+                    <option value="lte" selected>Lunera Turbo Engine (predeterminado)</option>
+                    <option value="yt-dlp">yt-dlp tradicional</option>
+                    <option value="lse">Lunera Stream Engine (fuentes directas)</option>
+                    <option value="ytdl-core">ytdl-core (legado)</option>
                   </select>
                 </div>
                 <div class="developer-tool-actions">
@@ -1808,6 +1822,7 @@ const NOW_PLAYING_STATE_COPY = {
 };
 
 function setNowPlayingState(nextState, detailText = '') {
+  syncNowPlayingSaveActions();
   const playerState = NOW_PLAYING_STATE_COPY[nextState] ? nextState : 'empty';
   state.playerUiState = playerState;
 
@@ -1910,7 +1925,9 @@ function getSavedInterfaceMode() {
 
 function updateInterfaceModeButtons(mode) {
   document.querySelectorAll('.interface-mode-option').forEach(option => {
-    option.classList.toggle('active', option.dataset.interfaceMode === mode);
+    const isActive = option.dataset.interfaceMode === mode;
+    option.classList.toggle('active', isActive);
+    option.setAttribute('aria-pressed', String(isActive));
   });
 }
 
@@ -1919,12 +1936,23 @@ function showInterfaceSwitchLoader(mode) {
   if (!loader) return;
   const title = document.getElementById('interfaceSwitchTitle');
   const message = document.getElementById('interfaceSwitchMessage');
-  if (title) {
-    title.textContent = mode === 'neo' ? 'Activando interfaz Neo' : 'Restaurando interfaz antigua';
-  }
-  if (message) {
-    message.textContent = mode === 'neo' ? 'Reordenando paneles, colores y reproductor' : 'Volviendo al diseño clásico de Lunera';
-  }
+  const copy = {
+    neo: {
+      title: 'Activando interfaz Neo',
+      message: 'Reordenando paneles, colores y reproductor'
+    },
+    halloween: {
+      title: 'Invocando el modo Halloween',
+      message: 'Encendiendo la luna, las calabazas y una nueva atmósfera'
+    },
+    classic: {
+      title: 'Restaurando interfaz antigua',
+      message: 'Volviendo al diseño clásico de Lunera'
+    }
+  };
+  const modeCopy = copy[mode] || copy.classic;
+  if (title) title.textContent = modeCopy.title;
+  if (message) message.textContent = modeCopy.message;
   loader.classList.add('active');
   loader.setAttribute('aria-hidden', 'false');
 }
@@ -1939,15 +1967,20 @@ function hideInterfaceSwitchLoader() {
 function applyInterfaceMode(mode, options = {}) {
   const nextMode = VALID_INTERFACE_MODES.includes(mode) ? mode : 'classic';
   state.visualSettings.interfaceMode = nextMode;
-  localStorage.setItem(INTERFACE_MODE_STORAGE_KEY, nextMode);
+  if (!options.skipSave) {
+    localStorage.setItem(INTERFACE_MODE_STORAGE_KEY, nextMode);
+  }
   updateInterfaceModeButtons(nextMode);
 
   const commitMode = () => {
     document.body.dataset.interfaceMode = nextMode;
     document.body.classList.toggle('neo-interface', nextMode === 'neo');
     document.body.classList.toggle('classic-interface', nextMode === 'classic');
+    document.body.classList.toggle('halloween-interface', nextMode === 'halloween');
     const label = document.getElementById('settingsInterfaceLabel');
-    if (label) label.textContent = nextMode === 'neo' ? 'Neo' : 'Antigua';
+    const labels = { classic: 'Antigua', neo: 'Neo', halloween: 'Halloween' };
+    if (label) label.textContent = labels[nextMode];
+    if (state.playbackSettings?.miniPlayer) sendMiniPlayerState({ force: true });
   };
 
   if (options.withLoader) {
@@ -1984,6 +2017,7 @@ function getLocalMusicContainer() {
 elements.localMusicContainer = getLocalMusicContainer() || elements.localMusicContainer;
 
 updateLibraryUI = function() {
+  syncNowPlayingSaveActions();
   const updatedPlaylistsContainer = document.getElementById('playlistsContainer');
   const updatedFavoritesContainer = document.getElementById('favoritesContainer');
   const createPlaylistBtn = document.getElementById('createPlaylistBtn');
@@ -2073,6 +2107,7 @@ async function loadVisualSettings() {
 
 // Actualizar la UI de configuración
 function updateSettingsUI() {
+  initializeSpectrogramStyles();
   if (elements.normalizeVolumeToggle) elements.normalizeVolumeToggle.checked = state.audioSettings.normalizeVolume;
   if (elements.visualizerToggle) elements.visualizerToggle.checked = state.visualSettings.showVisualizer;
   if (elements.visualizerOpacitySlider) {
@@ -2109,6 +2144,28 @@ function clampSpectrogramOpacity(value) {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return 0.4;
   return Math.min(1, Math.max(0, numericValue));
+}
+
+function initializeSpectrogramStyles() {
+  const toggle = document.getElementById('visualizerToggle');
+  const card = toggle?.closest('.setting-card');
+  if (!card) return;
+  let select = document.getElementById('spectrogramStyleSelect');
+  if (!select) {
+    const label = document.createElement('label');
+    label.className = 'spectrogram-style-control';
+    label.innerHTML = '<span>Escena de audio</span><select id="spectrogramStyleSelect"><option value="original">Original · diseño clásico de Lunera</option><option value="prism">Prisma · barras simétricas</option><option value="orbit">Órbita · círculo orgánico</option><option value="aurora">Aurora · ondas fluidas</option></select><small>Original conserva las barras, colores y efectos anteriores. Las escenas nuevas añaden filamentos reactivos.</small>';
+    card.append(label);
+    select = label.querySelector('select');
+    select.addEventListener('change', async () => {
+      state.visualSettings.spectrogramStyle = select.value;
+      audioScenePainter.reset();
+      saveSettings();
+      try { await ipcRenderer.invoke('set-visual-settings', state.visualSettings); }
+      catch { notificationSystem.warning('No se pudo sincronizar la escena de audio'); }
+    });
+  }
+  select.value = ['original', 'prism', 'orbit', 'aurora'].includes(state.visualSettings.spectrogramStyle) ? state.visualSettings.spectrogramStyle : 'original';
 }
 
 function updateVisualizerOpacityUI() {
@@ -2254,63 +2311,14 @@ function updateSliderProgress(slider) {
   slider.parentElement?.style.setProperty('--slider-progress', `${progress}%`);
 }
 
-function getRangeValueFromPointer(slider, clientX) {
-  const rect = slider.getBoundingClientRect();
-  const min = Number(slider.min || 0);
-  const max = Number(slider.max || 100);
-  const step = slider.step === 'any' ? 0 : Number(slider.step || 1);
-  const ratio = rect.width > 0
-    ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
-    : 0;
-  const rawValue = min + ((max - min) * ratio);
-  if (!step) return rawValue;
-
-  const snappedValue = min + (Math.round((rawValue - min) / step) * step);
-  const decimals = (String(step).split('.')[1] || '').length;
-  return Number(Math.min(max, Math.max(min, snappedValue)).toFixed(decimals));
-}
-
-function setRangeValueFromPointer(slider, clientX, eventName = 'input') {
-  if (!slider || slider.disabled) return;
-  slider.value = String(getRangeValueFromPointer(slider, clientX));
-  updateSliderProgress(slider);
-  slider.dispatchEvent(new Event(eventName, { bubbles: true }));
-}
-
 function initializeModernRangeSliderInteractions(root = document) {
   root.querySelectorAll('input.modern-slider[type="range"]').forEach((slider) => {
     if (slider.dataset.pointerRangeBound) return;
     slider.dataset.pointerRangeBound = 'true';
 
     slider.addEventListener('input', () => updateSliderProgress(slider));
-    slider.addEventListener('click', (event) => event.preventDefault());
-
-    slider.addEventListener('pointerdown', (event) => {
-      if (event.button !== undefined && event.button !== 0) return;
-      event.preventDefault();
-      slider.focus({ preventScroll: true });
-      setRangeValueFromPointer(slider, event.clientX, 'input');
-
-      const handlePointerMove = (moveEvent) => {
-        moveEvent.preventDefault();
-        setRangeValueFromPointer(slider, moveEvent.clientX, 'input');
-      };
-
-      const handlePointerUp = (upEvent) => {
-        if (Number.isFinite(upEvent.clientX)) {
-          setRangeValueFromPointer(slider, upEvent.clientX, 'change');
-        } else {
-          slider.dispatchEvent(new Event('change', { bubbles: true }));
-        }
-        document.removeEventListener('pointermove', handlePointerMove);
-        document.removeEventListener('pointerup', handlePointerUp);
-        document.removeEventListener('pointercancel', handlePointerUp);
-      };
-
-      document.addEventListener('pointermove', handlePointerMove);
-      document.addEventListener('pointerup', handlePointerUp);
-      document.addEventListener('pointercancel', handlePointerUp);
-    });
+    // Keep native pointer capture, keyboard steps and touch behavior.
+    updateSliderProgress(slider);
   });
 }
 
@@ -2354,17 +2362,43 @@ function refreshDefaultVolumeUI() {
 }
 
 function normalizeAudioExtractor(value) {
-  return ['auto', 'yt-dlp', 'ytdl-core'].includes(value) ? value : 'auto';
+  if (value === 'auto') return 'lte';
+  return ['lte', 'lse', 'yt-dlp', 'ytdl-core'].includes(value) ? value : 'lte';
 }
 
 function getAudioExtractorLabel(value) {
   const labels = {
-    auto: 'Automático',
+    lte: 'Lunera Turbo Engine',
+    lse: 'Lunera Stream Engine',
     'yt-dlp': 'yt-dlp',
-    'ytdl-core': 'ytdl-core',
+    'ytdl-core': 'ytdl-core (legado)',
     cache: 'Caché'
   };
   return labels[value] || value || 'Automático';
+}
+
+function getEffectivePlaybackQuality() {
+  const fallback = state.audioSettings?.streamingQuality || 'medium';
+  const extractor = normalizeAudioExtractor(state.developerSettings?.audioExtractor || 'lte');
+  if (extractor !== 'lte') return fallback;
+
+  const configured = String(lteSettingsMirror?.qualityMode || 'auto').toLowerCase();
+  if (configured === 'manual') return getManualLteFormatId() ? 'manual' : fallback;
+  return configured && configured !== 'auto' ? configured : fallback;
+}
+
+function getManualLteFormatId() {
+  if (normalizeAudioExtractor(state.developerSettings?.audioExtractor || 'lte') !== 'lte') return '';
+  if (lteSettingsMirror?.qualityMode !== 'manual') return '';
+  const candidate = String(lteSettingsMirror?.manualFormatId || '').trim();
+  return /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(candidate) ? candidate : '';
+}
+
+function buildStreamRequestOptions(requestId, extra = {}) {
+  const options = { ...extra, requestId };
+  const manualFormatId = getManualLteFormatId();
+  if (manualFormatId) options.manualFormatId = manualFormatId;
+  return options;
 }
 
 let activePlaybackRequestId = null;
@@ -2376,6 +2410,10 @@ const MAX_AUDIO_RECOVERY_ATTEMPTS = 1;
 function createPlaybackRequestId(track = {}) {
   const id = track.id || track.video_id || 'track';
   return `${Date.now()}-${String(id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 24)}`;
+}
+
+function isCurrentPlaybackRequest(requestId) {
+  return !!requestId && requestId === activePlaybackRequestId;
 }
 
 function resolveRemoteTrackUrl(track = {}) {
@@ -2400,54 +2438,154 @@ function warmPlaybackPipeline() {
   }
 }
 
+function getUpcomingTracksForPreload(limit = 1) {
+  const maximum = Math.max(0, Math.min(5, Number(limit) || 0));
+  if (!maximum || state.shuffle || state.playbackSettings.smartShuffle) return [];
+  const source = state.queue.length > 0 ? state.queue : state.currentPlaylist;
+  if (!Array.isArray(source) || source.length < 2) return [];
+
+  const currentIndex = state.queue.length > 0 ? findCurrentQueueIndex() : state.currentIndex;
+  const startIndex = currentIndex >= 0 ? currentIndex + 1 : 0;
+  const tracks = [];
+  const seen = new Set([getPlaybackTrackKey(state.currentTrack)].filter(Boolean));
+
+  for (let offset = 0; offset < source.length && tracks.length < maximum; offset += 1) {
+    const index = startIndex + offset;
+    if (index >= source.length) {
+      const canLoop = state.queue.length > 0 ? state.queueLoop : state.repeat === 'all';
+      if (!canLoop) break;
+    }
+    const track = source[index % source.length];
+    const key = getPlaybackTrackKey(track);
+    if (!track || !key || seen.has(key)) continue;
+    seen.add(key);
+    tracks.push(track);
+  }
+  return tracks;
+}
+
 function getUpcomingTrackForPreload() {
-  if (state.queue.length > 0) {
-    if (state.shuffle || state.playbackSettings.smartShuffle) return null;
-    const currentQueueIndex = findCurrentQueueIndex();
-    const nextIndex = currentQueueIndex >= 0
-      ? (state.queueLoop ? (currentQueueIndex + 1) % state.queue.length : currentQueueIndex + 1)
-      : 0;
-    return state.queue[nextIndex] || null;
+  return getUpcomingTracksForPreload(1)[0] || null;
+}
+
+function getLteNetworkPreloadProfile() {
+  const connection = typeof navigator === 'undefined'
+    ? null
+    : (navigator.connection || navigator.mozConnection || navigator.webkitConnection || null);
+  const effectiveType = String(connection?.effectiveType || '').toLowerCase();
+  return {
+    saveData: connection?.saveData === true,
+    constrained: ['slow-2g', '2g', '3g'].includes(effectiveType)
+  };
+}
+
+function shouldCancelUnusedEnginePreloads(extractorMode) {
+  return extractorMode !== 'lte' || lteSettingsMirror?.cancelUnusedPreloads !== false;
+}
+
+async function getEnginePreloadConfiguration(extractorMode) {
+  if (extractorMode === 'lte') {
+    if (!lteSettingsMirror) {
+      try {
+        const response = await ipcRenderer.invoke('lte:get-settings');
+        lteSettingsMirror = getLteSettingsFromResponse(response);
+      } catch (error) {
+        // The normal play path remains available even when developer IPC has
+        // not mounted yet. LTE itself still applies its canonical defaults.
+      }
+    }
+    const configuredCount = Math.max(0, Math.min(5, Number(lteSettingsMirror?.preloadTracks ?? 2) || 0));
+    const strategy = ['adaptive', 'next', 'conservative'].includes(lteSettingsMirror?.preloadStrategy)
+      ? lteSettingsMirror.preloadStrategy
+      : 'adaptive';
+    const network = getLteNetworkPreloadProfile();
+    let count = configuredCount;
+    if (network.saveData) count = 0;
+    else if (strategy === 'next') count = Math.min(configuredCount, 1);
+    else if (strategy === 'conservative') count = network.constrained ? 0 : Math.min(configuredCount, 1);
+    else if (network.constrained) count = Math.min(configuredCount, 1);
+    return {
+      enabled: lteSettingsMirror?.preloadEnabled !== false,
+      count,
+      strategy
+    };
   }
 
-  if (state.currentPlaylist && state.currentPlaylist.length > 1) {
-    if (state.shuffle || state.playbackSettings.smartShuffle) return null;
-    const nextIndex = (state.currentIndex + 1) % state.currentPlaylist.length;
-    if (nextIndex === 0 && state.repeat !== 'all') return null;
-    return state.currentPlaylist[nextIndex];
+  if (extractorMode === 'lse') {
+    return {
+      enabled: lseSettingsMirror?.preloadEnabled !== false && lseSettingsMirror?.gaplessEnabled !== false,
+      count: Math.max(0, Math.min(5, Number(lseSettingsMirror?.preloadTrackCount ?? 2) || 0))
+    };
   }
 
-  return null;
+  return { enabled: true, count: 1 };
+}
+
+function cancelEnginePreloads(extractorMode) {
+  if (extractorMode === 'lte') return ipcRenderer.invoke('lte:cancel-preloads').catch(() => null);
+  if (extractorMode === 'lse') return ipcRenderer.invoke('lse:cancel-preloads').catch(() => null);
+  return Promise.resolve(null);
 }
 
 function preloadUpcomingTrack() {
-  const track = getUpcomingTrackForPreload();
-  const url = resolveRemoteTrackUrl(track);
-  if (!url) return;
-
-  const quality = state.audioSettings?.streamingQuality || 'medium';
-  const key = `${quality}|${url}`;
-  if (key === lastPreloadedTrackKey) return;
-  lastPreloadedTrackKey = key;
-
-  ipcRenderer.invoke('preload-song', url, quality, {
-    extractorMode: state.developerSettings?.audioExtractor || 'auto',
-    timeoutMs: 20000
-  }).then((result) => {
-    if (!result?.ok && key === lastPreloadedTrackKey) {
-      lastPreloadedTrackKey = null;
-    }
-    if (state.developerSettings.verbosePlayerLogs) {
-      console.info('[audio-preload]', result);
-    }
-  }).catch((error) => {
-    if (key === lastPreloadedTrackKey) {
-      lastPreloadedTrackKey = null;
-    }
-    if (state.developerSettings.verbosePlayerLogs) {
-      console.warn('[audio-preload] fallo:', error.message);
-    }
+  void preloadUpcomingTrackAsync().catch((error) => {
+    if (state.developerSettings.verbosePlayerLogs) console.warn('[audio-preload] fallo:', error.message);
   });
+}
+
+async function preloadUpcomingTrackAsync() {
+  const extractorMode = normalizeAudioExtractor(state.developerSettings?.audioExtractor || 'lte');
+  const configuration = await getEnginePreloadConfiguration(extractorMode);
+  if (!configuration.enabled || !configuration.count) return;
+
+  const tracks = getUpcomingTracksForPreload(configuration.count);
+  const quality = getEffectivePlaybackQuality();
+  const manualFormatId = getManualLteFormatId();
+  const keys = tracks
+    .map(track => `${quality}|${manualFormatId}|${resolveRemoteTrackUrl(track)}`)
+    .filter(key => key !== `${quality}|${manualFormatId}|`);
+  const key = `${extractorMode}|${keys.join('||')}`;
+  if (!key || key === `${extractorMode}|` || key === lastPreloadedTrackKey) return;
+
+  const previousKey = lastPreloadedTrackKey;
+  lastPreloadedTrackKey = key;
+  if (previousKey && previousKey !== key && shouldCancelUnusedEnginePreloads(extractorMode)) {
+    await cancelEnginePreloads(extractorMode);
+  }
+
+  const results = await Promise.all(tracks.map((track, index) => {
+    const url = resolveRemoteTrackUrl(track);
+    if (!url) return Promise.resolve({ ok: false, error: 'Pista sin URL remota' });
+    return ipcRenderer.invoke('preload-song', url, quality, {
+      extractorMode,
+      timeoutMs: 20000,
+      requestId: `preload-${Date.now()}-${index}`,
+      priority: 'preload',
+      ...(manualFormatId ? { manualFormatId } : {})
+    });
+  }));
+
+  if (!results.some(result => result?.ok) && key === lastPreloadedTrackKey) {
+    lastPreloadedTrackKey = null;
+  }
+  if (state.developerSettings.verbosePlayerLogs) console.info('[audio-preload]', { extractorMode, results });
+}
+
+function refreshEnginePreloadsForQueue() {
+  const extractorMode = normalizeAudioExtractor(state.developerSettings?.audioExtractor || 'lte');
+  lastPreloadedTrackKey = null;
+  if (!shouldCancelUnusedEnginePreloads(extractorMode)) {
+    if (state.isPlaying) preloadUpcomingTrack();
+    return;
+  }
+  void cancelEnginePreloads(extractorMode).then(() => {
+    if (state.isPlaying) preloadUpcomingTrack();
+  });
+}
+
+// Alias conservado para extensiones antiguas que todavía llamen el nombre LSE.
+function refreshLsePreloadsForQueue() {
+  refreshEnginePreloadsForQueue();
 }
 
 function isHttpAudioPath(value) {
@@ -2562,15 +2700,16 @@ async function recoverAudioPlaybackAfterError(mediaError) {
     });
     setNowPlayingState('loading', 'Recuperando audio');
 
-    const quality = state.audioSettings?.streamingQuality || 'medium';
+    const quality = getEffectivePlaybackQuality();
     const requestId = activePlaybackRequestId || createPlaybackRequestId(state.currentTrack);
     activePlaybackRequestId = requestId;
     const recoveredStream = await ensureSafePlaybackPath(
-      await ipcRenderer.invoke('stream-song', state.currentTrack.url, quality, {
-        forceRefresh: true,
-        requestId
-      })
+      await ipcRenderer.invoke('stream-song', state.currentTrack.url, quality, buildStreamRequestOptions(requestId, {
+        forceRefresh: true
+      }))
     );
+
+    if (!isCurrentPlaybackRequest(requestId)) return false;
 
     state.currentTrack = {
       ...state.currentTrack,
@@ -2741,6 +2880,8 @@ function refreshDeveloperModeUI() {
     elements.streamingQualityHint.textContent = hints[state.audioSettings.streamingQuality || 'medium'];
   }
 
+  refreshLseDeveloperPanel();
+  refreshLteDeveloperPanel();
   updateStreamingQualityStatus(state.audioSettings.lastStreamingProfile || null);
   loadAudioCacheLibrary().catch(() => {});
   updateSettingsSummary();
@@ -2997,6 +3138,7 @@ function getMiniPlayerStatePayload() {
     currentTime: getAudioCurrentTime(),
     duration: getAudioDuration(),
     accentColor: state.visualSettings?.accentColor || '#1db954',
+    interfaceMode: state.visualSettings?.interfaceMode || getSavedInterfaceMode(),
     repeat: state.repeat,
     shuffle: !!state.shuffle,
     queueLength: Array.isArray(state.queue) ? state.queue.length : 0
@@ -3446,65 +3588,149 @@ function closeBirthdayVideo() {
 }
 
 function showIly4s0Credits() {
+  if (document.querySelector('.credits-overlay.credits-cinematic')) return;
+
+  const reduceMotion = isMotionReduced();
+  const previousFocus = document.activeElement;
   const overlay = document.createElement('div');
-  overlay.className = 'credits-overlay';
+  overlay.className = 'credits-overlay credits-cinematic';
+  overlay.classList.toggle('is-reduced-motion', reduceMotion);
+
+  const scene = document.createElement('div');
+  scene.className = 'credits-cinematic-scene';
+  scene.setAttribute('aria-hidden', 'true');
+  scene.innerHTML = `
+    <span class="credits-orbit credits-orbit-one"></span>
+    <span class="credits-orbit credits-orbit-two"></span>
+    <span class="credits-orbit credits-orbit-three"></span>
+    <span class="credits-particle-field">${'<i></i>'.repeat(16)}</span>
+  `;
+
   const content = document.createElement('div');
-  content.className = 'credits-content';
-  overlay.appendChild(content);
+  content.className = 'credits-content credits-cinematic-content';
+  content.setAttribute('role', 'dialog');
+  content.setAttribute('aria-modal', 'true');
+  content.setAttribute('aria-labelledby', 'ilyasCreditsTitle');
+  content.innerHTML = `
+    <button class="credits-cinematic-close" type="button" aria-label="Cerrar créditos">
+      <i class="fas fa-xmark" aria-hidden="true"></i>
+    </button>
+    <span class="credits-cinematic-kicker"><i class="fas fa-sparkles" aria-hidden="true"></i> Créditos especiales</span>
+    <h2 id="ilyasCreditsTitle">Para <span>1ly4s0</span></h2>
+    <p class="credits-cinematic-intro">Un pequeño agradecimiento para quien ayudó a que Lunera sonara mejor.</p>
+  `;
+
+  overlay.append(scene, content);
   document.body.appendChild(overlay);
-  
+
+  const closeButton = content.querySelector('.credits-cinematic-close');
   const lines = [
-    { text: 'Créditos especiales', className: 'credit-line accent' },
-    { text: 'A 1ly4s0 (Ilyas)', className: 'credit-line' },
-    { text: 'Por acompañarme en el desarrollo de Lunera', className: 'credit-line' },
-    { text: 'Resolviendo problemas que no sabia resolver y guiándome en arquitectura', className: 'credit-line' },
-    { text: 'Optimización, rendimiento y calidad: Lo resolviste tu', className: 'credit-line' },
-    { text: 'APIs y funcionamiento correcto: Gracias a ti', className: 'credit-line' },
-    { text: 'Gracias por tu tiempo y dedicación', className: 'credit-line' },
-    { text: 'Agradecimiento infinito ❤️', className: 'credit-line accent' }
+    { text: 'Ilyas, gracias por acompañar el desarrollo de Lunera.', className: 'credit-line accent' },
+    { text: 'Por resolver los problemas que todavía no sabía nombrar.', className: 'credit-line' },
+    { text: 'Por guiar la arquitectura cuando el camino no era evidente.', className: 'credit-line' },
+    { text: 'Por convertir rendimiento, optimización y calidad en detalles que se sienten.', className: 'credit-line' },
+    { text: 'Por hacer que las APIs y cada pieza funcionaran como debían.', className: 'credit-line' },
+    { text: 'Tu tiempo, criterio y dedicación viven en esta versión.', className: 'credit-line' },
+    { text: 'Gracias infinitas.', className: 'credit-line accent' }
   ];
-  
-  // Barra de progreso
+
+  const linesContainer = document.createElement('div');
+  linesContainer.className = 'credits-cinematic-lines';
+  content.appendChild(linesContainer);
+
   const progress = document.createElement('div');
-  progress.className = 'credits-progress';
-  const bar = document.createElement('div');
-  bar.className = 'bar';
-  progress.appendChild(bar);
+  progress.className = 'credits-progress credits-cinematic-progress';
+  progress.innerHTML = '<span class="bar"></span>';
   content.appendChild(progress);
-  
-  let delay = 0;
-  lines.forEach((l, idx) => {
-    const div = document.createElement('div');
-    div.className = l.className;
-    div.style.animationDelay = `${delay}s`;
-    div.textContent = l.text;
-    content.appendChild(div);
-    delay += 1.1;
+
+  const lineDelay = reduceMotion ? 0 : 900;
+  const revealWindow = reduceMotion ? 4200 : lines.length * lineDelay + 2500;
+  let finished = false;
+  let finishTimer;
+
+  const cleanup = openExternal => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(finishTimer);
+    document.removeEventListener('keydown', handleKeydown);
+    overlay.classList.add('is-closing');
+
+    window.setTimeout(() => {
+      overlay.remove();
+      previousFocus?.focus?.();
+      if (openExternal) {
+        try {
+          shell.openExternal('https://www.1ly4s0.dev/');
+        } catch (error) {
+          console.warn('No se pudo abrir el sitio de créditos:', error);
+        }
+      }
+    }, reduceMotion ? 0 : 420);
+  };
+
+  const handleKeydown = event => {
+    if (event.key === 'Escape') cleanup(false);
+  };
+
+  lines.forEach((line, index) => {
+    const element = document.createElement('p');
+    element.className = `credits-cinematic-line ${line.className}`;
+    element.textContent = line.text;
+    element.style.setProperty('--credit-delay', `${index * lineDelay}ms`);
+    linesContainer.appendChild(element);
   });
-  
-  // Al terminar, corazones y redirección
-  const total = delay + 1.6;
-  bar.style.animationDuration = `${total}s`;
-  setTimeout(() => {
-    for (let i = 0; i < 20; i++) setTimeout(createFloatingHeart, i * 200);
-  }, (total - 1.2) * 1000);
-  
-  setTimeout(() => {
-    overlay.remove();
-    try {
-      shell.openExternal('https://www.1ly4s0.dev/');
-    } catch(e) {}
-  }, total * 1000);
+
+  progress.querySelector('.bar').style.setProperty('--credits-duration', `${revealWindow}ms`);
+  closeButton.addEventListener('click', () => cleanup(false));
+  document.addEventListener('keydown', handleKeydown);
+  window.setTimeout(() => closeButton.focus(), 0);
+
+  finishTimer = window.setTimeout(() => cleanup(true), revealWindow);
 }
-// Evento para los corazones al hacer clic en la dedicatoria
-if (elements.dedicationLink) {
-  elements.dedicationLink.addEventListener('click', (e) => {
-    e.preventDefault();
-    console.log('Clic en la dedicatoria, generando corazones');
-    for (let i = 0; i < 10; i++) {
-      setTimeout(createFloatingHeart, i * 200);
+function isMotionReduced() {
+  return document.body.classList.contains('settings-reduce-motion')
+    || document.body.dataset.settingsAnimation === 'reduced'
+    || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+function celebrateDedication() {
+  const dedicationSection = elements.dedicationLink?.closest('.dedication-section');
+  const celebrationStatus = document.getElementById('dedicationCelebrationStatus');
+
+  if (!dedicationSection) return;
+
+  dedicationSection.classList.remove('is-celebrating');
+  void dedicationSection.offsetWidth;
+  dedicationSection.classList.add('is-celebrating');
+
+  if (celebrationStatus) {
+    celebrationStatus.textContent = 'Una lluvia de corazones celebra a Mateo Luciano Luppoli.';
+  }
+
+  if (!isMotionReduced()) {
+    for (let index = 0; index < 9; index += 1) {
+      const heart = document.createElement('span');
+      const isSpark = index % 3 === 0;
+
+      heart.className = 'dedication-burst-heart';
+      heart.setAttribute('aria-hidden', 'true');
+      heart.textContent = isSpark ? '✦' : '♥';
+      heart.style.setProperty('--heart-x', `${Math.round((Math.random() - 0.5) * 122)}px`);
+      heart.style.setProperty('--heart-y', `${-(34 + Math.round(Math.random() * 86))}px`);
+      heart.style.setProperty('--heart-rotation', `${Math.round((Math.random() - 0.5) * 110)}deg`);
+      heart.style.setProperty('--heart-size', `${(0.58 + Math.random() * 0.42).toFixed(2)}rem`);
+      heart.style.setProperty('--heart-color', isSpark ? 'var(--primary-color)' : index % 2 ? '#ff8eab' : '#ffd1dc');
+      heart.addEventListener('animationend', () => heart.remove(), { once: true });
+      dedicationSection.appendChild(heart);
     }
-  });
+  }
+
+  window.setTimeout(() => dedicationSection.classList.remove('is-celebrating'), 900);
+}
+
+// La celebraciÃ³n ocurre dentro de la tarjeta para no interrumpir la pantalla activa.
+if (elements.dedicationLink) {
+  elements.dedicationLink.addEventListener('click', celebrateDedication);
 }
 
 if (elements.dedicationCreditsBtn) {
@@ -3514,26 +3740,29 @@ if (elements.dedicationCreditsBtn) {
 }
 
 function finishStartupIntro() {
+  if (startupIntroFinished) return;
+  startupIntroFinished = true;
   if (startupIntroTimer) {
     clearTimeout(startupIntroTimer);
     startupIntroTimer = null;
   }
 
-  if (elements.loadingScreen) {
-    elements.loadingScreen.classList.add('is-exiting');
-    elements.loadingScreen.style.display = 'none';
-  }
-  stopLoadingBackground();
-
-  if (state.isNewUser) {
-    elements.signupScreen?.classList.add('active');
-  } else {
-    showFeedbackPrompt();
-  }
+  const revealApp = () => {
+    startupIntroExitTimer = null;
+    if (elements.loadingScreen) elements.loadingScreen.style.display = 'none';
+    stopLoadingBackground();
+    if (state.isNewUser) elements.signupScreen?.classList.add('active');
+    else showFeedbackPrompt();
+  };
+  elements.loadingScreen?.classList.add('is-exiting');
+  if (!elements.loadingScreen || isMotionReduced()) revealApp();
+  else startupIntroExitTimer = window.setTimeout(revealApp, 450);
 }
 
 // Intro inicial breve
 function showLoadingMessages() {
+  startupIntroFinished = false;
+  if (startupIntroExitTimer) { clearTimeout(startupIntroExitTimer); startupIntroExitTimer = null; }
   if (!elements.loadingScreen) {
     finishStartupIntro();
     return;
@@ -3541,9 +3770,7 @@ function showLoadingMessages() {
 
   elements.loadingScreen.style.display = 'flex';
   elements.loadingScreen.classList.remove('is-exiting');
-  initLoadingBackground();
-
-  startupIntroTimer = setTimeout(finishStartupIntro, STARTUP_INTRO_DURATION_MS);
+  startupIntroTimer = setTimeout(finishStartupIntro, isMotionReduced() ? 120 : STARTUP_INTRO_DURATION_MS);
 }
 
 function enterAppAfterOnboarding() {
@@ -4021,6 +4248,9 @@ async function playSong(track) {
 
     playbackRequestId = createPlaybackRequestId(track);
     activePlaybackRequestId = playbackRequestId;
+    lseBufferingStartedAt = null;
+    lteBufferingStartedAt = null;
+    lteLastPlaybackRequestId = null;
     audioRecoveryInProgress = false;
     audioRecoveryAttempts = 0;
     warmPlaybackPipeline();
@@ -4072,10 +4302,26 @@ async function playSong(track) {
     } else {
       // Para música de YouTube, usar el streaming normal
       console.log('Usando método YouTube para:', track.title);
-      const q = (state.audioSettings && state.audioSettings.streamingQuality) ? state.audioSettings.streamingQuality : 'medium';
-      streamData = await ipcRenderer.invoke('stream-song', track.url, q, { requestId: playbackRequestId });
+      const q = getEffectivePlaybackQuality();
+      streamData = await ipcRenderer.invoke('stream-song', track.url, q, buildStreamRequestOptions(playbackRequestId));
+    }
+    if (!isCurrentPlaybackRequest(playbackRequestId)) {
+      console.info('[reproducción] respuesta obsoleta descartada:', playbackRequestId);
+      if (playbackTimerRunning) {
+        console.timeEnd(`[reproducción] preparar ${playbackRequestId}`);
+        playbackTimerRunning = false;
+      }
+      return;
     }
     streamData = await ensureSafePlaybackPath(streamData);
+    if (!isCurrentPlaybackRequest(playbackRequestId)) {
+      console.info('[reproducción] ruta obsoleta descartada:', playbackRequestId);
+      if (playbackTimerRunning) {
+        console.timeEnd(`[reproducción] preparar ${playbackRequestId}`);
+        playbackTimerRunning = false;
+      }
+      return;
+    }
     if (playbackTimerRunning) {
       console.timeEnd(`[reproducción] preparar ${playbackRequestId}`);
       playbackTimerRunning = false;
@@ -4131,13 +4377,18 @@ async function playSong(track) {
     updateVolumeUI();
 
     const finalizePlaybackStart = () => {
+      if (!isCurrentPlaybackRequest(playbackRequestId)) return;
       state.isPlaying = true;
       updatePlayingUI(true);
-      addToRecentlyPlayed(state.currentTrack);
+      const savesListeningHistory = state.privacySettings?.saveListeningHistory !== false
+        && localStorage.getItem('saveListeningHistory') !== 'false';
+      if (savesListeningHistory) {
+        addToRecentlyPlayed(state.currentTrack);
+        ipcRenderer.invoke('update-history', state.currentTrack).catch(err => {
+          console.error('Error al actualizar historial:', err);
+        });
+      }
       updateRecommendationsForTrack(state.currentTrack);
-      ipcRenderer.invoke('update-history', state.currentTrack).catch(err => {
-        console.error('Error al actualizar historial:', err);
-      });
       showPlayingGif();
 
       if (state.visualSettings.showVisualizer) {
@@ -4174,9 +4425,11 @@ async function playSong(track) {
       if (playPromise !== undefined) {
         await playPromise;
       }
+      if (!isCurrentPlaybackRequest(playbackRequestId)) return;
       finalizePlaybackStart();
       applyCrossfadeFadeIn();
     } catch (playError) {
+      if (!isCurrentPlaybackRequest(playbackRequestId)) return;
       console.error('Error al iniciar reproducción:', playError);
       const isRemoteStreamPath = typeof streamData?.path === 'string' && /^https?:\/\//i.test(streamData.path);
       const shouldForceRefreshStream = !track.isLocal
@@ -4186,10 +4439,11 @@ async function playSong(track) {
 
       if (shouldForceRefreshStream) {
         try {
-          const q = (state.audioSettings && state.audioSettings.streamingQuality) ? state.audioSettings.streamingQuality : 'medium';
+          const q = getEffectivePlaybackQuality();
           const refreshedStreamData = await ensureSafePlaybackPath(
-            await ipcRenderer.invoke('stream-song', track.url, q, { forceRefresh: true, requestId: playbackRequestId })
+            await ipcRenderer.invoke('stream-song', track.url, q, buildStreamRequestOptions(playbackRequestId, { forceRefresh: true }))
           );
+          if (!isCurrentPlaybackRequest(playbackRequestId)) return;
           state.currentTrack = {
             ...track,
             ...refreshedStreamData.metadata,
@@ -4209,6 +4463,7 @@ async function playSong(track) {
           elements.audio.src = refreshedStreamData.path;
           elements.audio.load();
           await elements.audio.play();
+          if (!isCurrentPlaybackRequest(playbackRequestId)) return;
           finalizePlaybackStart();
           applyCrossfadeFadeIn();
           return;
@@ -4219,6 +4474,7 @@ async function playSong(track) {
       setTimeout(async () => {
         try {
           await elements.audio.play();
+          if (!isCurrentPlaybackRequest(playbackRequestId)) return;
           finalizePlaybackStart();
           applyCrossfadeFadeIn();
         } catch (retryError) {
@@ -4234,10 +4490,19 @@ async function playSong(track) {
       playbackTimerRunning = false;
     }
     console.error('Error al reproducir canción:', error);
+    if (!isCurrentPlaybackRequest(playbackRequestId)) return;
     
     // Mensaje de error más específico
     let errorMessage = 'Error al reproducir la canción';
-    if (error.message.includes('Timeout')) {
+    if (error.code === 'PROVIDER_RESTRICTION' || error.message.includes('páginas de proveedores') || error.message.includes('paginas de proveedores')) {
+      errorMessage = 'Esta fuente requiere un proveedor compatible. Prueba una URL directa autorizada o activa un motor alternativo en Configuración.';
+    } else if (error.code === 'SOURCE_UNSUPPORTED' || error.message.includes('recurso de audio o video directo')) {
+      errorMessage = 'La fuente no expone un audio directo que Lunera pueda reproducir.';
+    } else if (error.code === 'PLAYBACK_UNSUPPORTED') {
+      errorMessage = 'Lunera detectó este formato, pero todavía no puede reproducirlo de forma nativa.';
+    } else if (error.code === 'NETWORK_DESTINATION_BLOCKED') {
+      errorMessage = 'Lunera bloqueó esta dirección por seguridad.';
+    } else if (error.message.includes('Timeout')) {
       errorMessage = 'La canción tardó demasiado en cargar. Intenta con otra canción.';
     } else if (error.message.includes('Track inválido')) {
       errorMessage = 'La canción seleccionada no es válida.';
@@ -4875,18 +5140,32 @@ function bindLocalArtistArtworkFallbacks(container) {
 
 function bindLocalArtistsModalClose(modal, onClose) {
   let closed = false;
+  const previousFocus = document.activeElement;
   const close = () => {
     if (closed) return;
     closed = true;
     document.removeEventListener('keydown', onKeyDown);
-    modal.remove();
-    syncLocalArtistsNavigationState();
-    if (typeof onClose === 'function') onClose();
+    modal.classList.add('is-closing');
+    modal.removeAttribute('id');
+    modal.inert = true;
+    window.setTimeout(() => {
+      modal.remove();
+      syncLocalArtistsNavigationState();
+      if (!document.querySelector('.local-artists-modal:not(.is-closing)') && previousFocus?.isConnected) previousFocus.focus();
+      if (typeof onClose === 'function') onClose();
+    }, isMotionReduced() ? 0 : 190);
   };
   const onKeyDown = (event) => {
     if (event.key === 'Escape') {
       event.preventDefault();
       close();
+    }
+    if (event.key === 'Tab' && !closed) {
+      const focusable = [...modal.querySelectorAll('button, a[href], input, [tabindex="0"]')]
+        .filter(element => !element.disabled && element.getClientRects().length);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     }
   };
 
@@ -4913,7 +5192,7 @@ function openLocalArtistsModal() {
         <div class="local-artists-heading">
           <span class="local-artists-kicker"><i class="fas fa-sparkles"></i> Selección de Lunera</span>
           <h2 id="localArtistsModalTitle">Artistas locales</h2>
-          <p>Conocé a los artistas que Lunera está ayudando a impulsar.</p>
+          <p>Hecho cerca. Suena distinto.<br>Descubrí las voces que están creando su propio camino.</p>
         </div>
         <button class="local-artists-close-button" type="button" data-local-artists-dismiss aria-label="Cerrar artistas locales">
           <i class="fas fa-times" aria-hidden="true"></i>
@@ -4922,28 +5201,29 @@ function openLocalArtistsModal() {
 
       <div class="local-artists-selection-copy">
         <span><i class="fas fa-heart" aria-hidden="true"></i> Artistas patrocinados</span>
-        <p>Elegí un perfil y explorá sus lanzamientos sin salir de Lunera.</p>
+        <p>${LOCAL_ARTISTS_CATALOG.length} artistas · ${LOCAL_ARTISTS_CATALOG.reduce((total, artist) => total + artist.songs.length, 0)} lanzamientos para descubrir</p>
       </div>
 
       <div class="local-artists-cards" role="list" aria-label="Artistas locales disponibles">
-        ${LOCAL_ARTISTS_CATALOG.map(artist => {
+        ${LOCAL_ARTISTS_CATALOG.map((artist, index) => {
           const releaseLabel = artist.songs.length === 1 ? '1 lanzamiento' : `${artist.songs.length} lanzamientos`;
           return `
-            <button class="local-artists-card local-artists-card--${artist.style}" type="button" data-local-artist-id="${artist.id}" role="listitem" aria-label="Ver canciones de ${artist.name}">
+            <div class="local-artists-card-item" role="listitem" style="--local-card-order:${index}"><button class="local-artists-card local-artists-card--${artist.style}" type="button" data-local-artist-id="${artist.id}" aria-label="Ver canciones de ${artist.name}">
               <div class="local-artists-card-glow" aria-hidden="true"></div>
               <div class="local-artists-card-avatar local-artists-artwork" data-local-artwork-container data-monogram="${artist.initials}">
                 <img data-local-artwork src="${artist.profileImage}" alt="${artist.name}" referrerpolicy="no-referrer">
+                <span class="local-artists-photo-label" aria-hidden="true">SELECCIÓN / ${String(index + 1).padStart(2, '0')}</span>
               </div>
               <div class="local-artists-card-copy">
-                <span class="local-artists-card-status">Artista local</span>
+                <span class="local-artists-card-status">${releaseLabel}</span>
                 <h3>${artist.name}</h3>
                 <p>${artist.description}</p>
               </div>
               <div class="local-artists-card-footer">
-                <span>${releaseLabel}</span>
+                <span>Explorar su música</span>
                 <span class="local-artists-card-arrow"><i class="fas fa-arrow-right" aria-hidden="true"></i></span>
               </div>
-            </button>
+            </button></div>
           `;
         }).join('')}
       </div>
@@ -5099,382 +5379,230 @@ function openLocalArtistSongsModal(artistId) {
   requestAnimationFrame(() => modal.querySelector('.local-artists-close-button')?.focus());
 }
 
-function createSpotifyImportProgressModal() {
-  const existing = document.getElementById('spotifyImportProgressModal');
-  if (existing) return existing;
+const APP_UPDATE_FALLBACK_NOTES =
+  'Esta versión incluye mejoras de estabilidad, rendimiento y experiencia general.';
+let dismissedAppUpdateVersion = null;
+let appUpdatePreviousFocus = null;
 
-  const modal = document.createElement('div');
-  modal.id = 'spotifyImportProgressModal';
-  modal.className = 'spotify-import-progress-modal spotify-import-progress-modal--spotify';
-  modal.innerHTML = `
-    <div class="spotify-import-progress-backdrop"></div>
-    <div class="spotify-import-progress-dialog">
-      <div class="spotify-import-progress-header">
-        <div class="spotify-import-progress-title-wrap">
-          <div class="spotify-import-progress-icon spotify-import-progress-icon--spotify">
-            <i class="fab fa-spotify"></i>
-          </div>
-          <div>
-            <strong>Importando playlist de Spotify</strong>
-            <p>Estableciendo conexión y preparando tu biblioteca.</p>
-          </div>
-        </div>
-        <button type="button" id="cancelSpotifyImportBtn" class="spotify-import-cancel-btn">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="spotify-import-progress-body">
-        <div class="spotify-import-progress-meta">
-          <span class="spotify-import-progress-pill">Sin abrir Spotify</span>
-          <span class="spotify-import-progress-pill">Procesamiento local</span>
-        </div>
-        <p id="spotifyImportProgressMessage">Preparando importación...</p>
-        <div class="spotify-import-progress-bar">
-          <div class="spotify-import-progress-fill" id="spotifyImportProgressFill"></div>
-        </div>
-        <div class="spotify-import-progress-footer">
-          <span id="spotifyImportProgressPercent">0%</span>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-
-  const cancelBtn = modal.querySelector('#cancelSpotifyImportBtn');
-  cancelBtn.addEventListener('click', () => {
-    modal.dataset.cancelRequested = 'true';
-  });
-
-  return modal;
+function normalizeAppUpdateText(value, maxLength = 12000) {
+  return typeof value === 'string' ? value.trim().slice(0, maxLength) : '';
 }
 
-function promptSpotifyImportUrl() {
-  return new Promise((resolve) => {
-    const existing = document.getElementById('spotifyImportUrlModal');
-    if (existing) existing.remove();
+function normalizeAppUpdateStatus(payload) {
+  if (!payload || typeof payload !== 'object') return null;
 
-    const modal = document.createElement('div');
-    modal.id = 'spotifyImportUrlModal';
-    modal.className = 'spotify-import-url-modal spotify-import-url-modal--spotify';
-    modal.innerHTML = `
-      <div class="spotify-import-url-backdrop"></div>
-      <div class="spotify-import-url-dialog">
-        <div class="spotify-import-url-header">
-          <div class="spotify-import-url-title-wrap">
-            <div class="spotify-import-url-icon spotify-import-url-icon--spotify">
-              <i class="fab fa-spotify"></i>
-            </div>
-            <div>
-              <strong>Importar desde Spotify</strong>
-              <p>Pega una URL de playlist, álbum o canción y la importaremos a Lunera.</p>
-            </div>
-          </div>
-        </div>
-        <div class="spotify-import-url-body">
-          <label for="spotifyPlaylistUrlInput">URL de Spotify</label>
-          <div class="spotify-import-url-input-shell">
-            <i class="fab fa-spotify"></i>
-            <input id="spotifyPlaylistUrlInput" type="text" placeholder="https://open.spotify.com/playlist/..." autocomplete="off" autocapitalize="none" />
-          </div>
-          <p class="spotify-import-url-hint">Ejemplo: open.spotify.com/playlist/..., open.spotify.com/album/..., open.spotify.com/track/...</p>
-        </div>
-        <div class="spotify-import-url-actions">
-          <button type="button" id="spotifyImportUrlCancelBtn" class="spotify-import-url-button spotify-import-url-cancel">Cancelar</button>
-          <button type="button" id="spotifyImportUrlSubmitBtn" class="spotify-import-url-button spotify-import-url-submit">Importar</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const input = modal.querySelector('#spotifyPlaylistUrlInput');
-    const cancelBtn = modal.querySelector('#spotifyImportUrlCancelBtn');
-    const submitBtn = modal.querySelector('#spotifyImportUrlSubmitBtn');
-    const backdrop = modal.querySelector('.spotify-import-url-backdrop');
-
-    const cleanup = () => {
-      cancelBtn?.removeEventListener('click', onCancel);
-      submitBtn?.removeEventListener('click', onSubmit);
-      backdrop?.removeEventListener('click', onCancel);
-      document.removeEventListener('keydown', onKeyDown);
-      modal.remove();
-    };
-
-    const onCancel = () => {
-      cleanup();
-      resolve(null);
-    };
-
-    const onSubmit = () => {
-      const value = input?.value.trim();
-      if (!value) {
-        input?.focus();
-        return;
-      }
-      cleanup();
-      resolve(value);
-    };
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onCancel();
-      }
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        onSubmit();
-      }
-    };
-
-    cancelBtn?.addEventListener('click', onCancel);
-    submitBtn?.addEventListener('click', onSubmit);
-    backdrop?.addEventListener('click', onCancel);
-    document.addEventListener('keydown', onKeyDown);
-
-    input?.focus();
-  });
+  return {
+    version: normalizeAppUpdateText(payload.version, 100) || 'Nueva versión',
+    releaseName: normalizeAppUpdateText(payload.releaseName, 180),
+    releaseNotes: normalizeAppUpdateText(payload.releaseNotes),
+    releaseDate: normalizeAppUpdateText(payload.releaseDate, 100)
+  };
 }
 
-function updateSpotifyImportProgress(percent, message) {
-  const modal = document.getElementById('spotifyImportProgressModal');
+function getAppUpdateFocusableElements(modal) {
+  return Array.from(modal.querySelectorAll(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  )).filter((element) => !element.hidden && element.getClientRects().length > 0);
+}
+
+function closeAppUpdateModal({ restoreFocus = true } = {}) {
+  const modal = document.getElementById('appUpdateModal');
+  if (!modal || modal.dataset.installing === 'true') return;
+
+  const keydownHandler = modal._appUpdateKeydownHandler;
+  if (keydownHandler) document.removeEventListener('keydown', keydownHandler);
+
+  const version = modal.dataset.updateVersion;
+  if (version) dismissedAppUpdateVersion = version;
+  modal.remove();
+
+  const previousFocus = appUpdatePreviousFocus;
+  appUpdatePreviousFocus = null;
+  if (restoreFocus && previousFocus && document.contains(previousFocus)) {
+    previousFocus.focus();
+  }
+}
+
+function setAppUpdateInstallState(modal, installing, message = '') {
   if (!modal) return;
-  const fill = modal.querySelector('#spotifyImportProgressFill');
-  const messageElement = modal.querySelector('#spotifyImportProgressMessage');
-  const percentElement = modal.querySelector('#spotifyImportProgressPercent');
-  if (fill) fill.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
-  if (messageElement) messageElement.textContent = message;
-  if (percentElement) percentElement.textContent = `${Math.min(Math.max(percent, 0), 100)}%`;
+
+  modal.dataset.installing = installing ? 'true' : 'false';
+  modal.setAttribute('aria-busy', installing ? 'true' : 'false');
+  modal.querySelectorAll('button').forEach((button) => {
+    button.disabled = installing;
+  });
+
+  const actionLabel = modal.querySelector('[data-app-update-install-label]');
+  if (actionLabel) actionLabel.textContent = installing ? 'Reiniciando...' : 'Reiniciar e instalar';
+
+  const status = modal.querySelector('[data-app-update-status]');
+  if (status) {
+    status.hidden = !message;
+    status.textContent = message;
+  }
 }
 
-function closeSpotifyImportProgressModal() {
-  const modal = document.getElementById('spotifyImportProgressModal');
-  if (modal) modal.remove();
+async function requestAppUpdateInstall(modal) {
+  if (!modal || modal.dataset.installing === 'true') return;
+
+  setAppUpdateInstallState(modal, true, 'Preparando la instalación y reiniciando Lunera...');
+
+  try {
+    const accepted = await ipcRenderer.invoke('app-update:install');
+    if (accepted) return;
+
+    setAppUpdateInstallState(
+      modal,
+      false,
+      'La actualización ya no está disponible. Puedes intentarlo de nuevo al reiniciar Lunera.'
+    );
+  } catch (error) {
+    console.error('[updates] No se pudo iniciar la instalación:', error);
+    setAppUpdateInstallState(
+      modal,
+      false,
+      'No se pudo iniciar la instalación. Inténtalo de nuevo en unos instantes.'
+    );
+  }
+}
+
+function updateAppUpdateModalContent(modal, update) {
+  const title = modal.querySelector('[data-app-update-title]');
+  const version = modal.querySelector('[data-app-update-version]');
+  const description = modal.querySelector('[data-app-update-description]');
+  const notes = modal.querySelector('[data-app-update-notes]');
+
+  if (title) title.textContent = 'Lunera ' + update.version + ' está lista';
+  if (version) version.textContent = 'Versión ' + update.version;
+  if (description) {
+    description.textContent = update.releaseName
+      ? update.releaseName + ' · Ya se descargó en segundo plano. Puedes reiniciar ahora o seguir escuchando.'
+      : 'Ya se descargó en segundo plano. Puedes reiniciar ahora o seguir escuchando.';
+  }
+  if (notes) {
+    const hasReleaseNotes = Boolean(update.releaseNotes);
+    notes.textContent = update.releaseNotes || APP_UPDATE_FALLBACK_NOTES;
+    notes.classList.toggle('is-fallback', !hasReleaseNotes);
+  }
+
+  modal.dataset.updateVersion = update.version;
+}
+
+function bindAppUpdateModal(modal) {
+  const dismiss = () => closeAppUpdateModal();
+  modal.querySelectorAll('[data-app-update-dismiss]').forEach((element) => {
+    element.addEventListener('click', dismiss);
+  });
+  modal.querySelector('[data-app-update-later]')?.addEventListener('click', dismiss);
+  modal.querySelector('[data-app-update-install]')?.addEventListener('click', () => {
+    requestAppUpdateInstall(modal);
+  });
+
+  const keydownHandler = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeAppUpdateModal();
+      return;
+    }
+    if (event.key !== 'Tab') return;
+
+    const focusable = getAppUpdateFocusableElements(modal);
+    if (!focusable.length) {
+      event.preventDefault();
+      modal.querySelector('.app-update-dialog')?.focus();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
+  modal._appUpdateKeydownHandler = keydownHandler;
+  document.addEventListener('keydown', keydownHandler);
+}
+
+function showAppUpdateModal(payload) {
+  const update = normalizeAppUpdateStatus(payload);
+  if (!update) return;
+
+  if (!document.body) {
+    document.addEventListener('DOMContentLoaded', () => showAppUpdateModal(update), { once: true });
+    return;
+  }
+
+  let modal = document.getElementById('appUpdateModal');
+  if (!modal && dismissedAppUpdateVersion === update.version) return;
+
+  const isNewModal = !modal;
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'appUpdateModal';
+    modal.className = 'app-update-modal';
+    modal.innerHTML = [
+      '<div class="app-update-backdrop" data-app-update-dismiss aria-hidden="true"></div>',
+      '<section class="app-update-dialog" role="dialog" aria-modal="true" aria-labelledby="appUpdateTitle" aria-describedby="appUpdateDescription" tabindex="-1">',
+      '<button class="app-update-close" type="button" data-app-update-dismiss aria-label="Recordármelo más tarde"><i class="fas fa-times" aria-hidden="true"></i></button>',
+      '<div class="app-update-heading">',
+      '<div class="app-update-icon" aria-hidden="true"><span class="app-update-icon-ring"></span><i class="fas fa-arrow-down"></i></div>',
+      '<div class="app-update-heading-copy"><span class="app-update-eyebrow"><i class="fas fa-sparkles" aria-hidden="true"></i> Actualización lista</span><h2 id="appUpdateTitle" data-app-update-title></h2></div>',
+      '<span class="app-update-version" data-app-update-version></span>',
+      '</div>',
+      '<p class="app-update-description" id="appUpdateDescription" data-app-update-description></p>',
+      '<section class="app-update-notes" aria-labelledby="appUpdateNotesTitle">',
+      '<div class="app-update-notes-header"><span class="app-update-notes-icon"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></span><span id="appUpdateNotesTitle">Novedades de esta versión</span></div>',
+      '<p data-app-update-notes></p>',
+      '</section>',
+      '<div class="app-update-footer">',
+      '<p class="app-update-reassurance"><i class="fas fa-shield-heart" aria-hidden="true"></i> También se instalará automáticamente cuando cierres Lunera.</p>',
+      '<div class="app-update-actions">',
+      '<button class="app-update-button app-update-button--secondary" type="button" data-app-update-later>Más tarde</button>',
+      '<button class="app-update-button app-update-button--primary" type="button" data-app-update-install><span data-app-update-install-label>Reiniciar e instalar</span><i class="fas fa-arrow-right" aria-hidden="true"></i></button>',
+      '</div>',
+      '<p class="app-update-status" data-app-update-status aria-live="polite" hidden></p>',
+      '</div>',
+      '</section>'
+    ].join('');
+
+    appUpdatePreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.appendChild(modal);
+    bindAppUpdateModal(modal);
+  }
+
+  updateAppUpdateModalContent(modal, update);
+  if (isNewModal) {
+    requestAnimationFrame(() => {
+      modal.querySelector('[data-app-update-later]')?.focus();
+    });
+  }
+}
+
+async function restorePendingAppUpdate() {
+  try {
+    const update = await ipcRenderer.invoke('app-update:get-status');
+    if (update) showAppUpdateModal(update);
+  } catch (error) {
+    console.warn('[updates] No se pudo recuperar el estado de actualización:', error);
+  }
 }
 
 async function openSpotifyImportPrompt() {
-  const spotifyUrl = await promptSpotifyImportUrl();
-  if (!spotifyUrl) return;
-
-  const modal = createSpotifyImportProgressModal();
-  modal.dataset.cancelRequested = 'false';
-  updateSpotifyImportProgress(5, 'Validando URL de Spotify...');
-
-  try {
-    const { SpotifyImporter } = require('./spotifyImporter.js');
-    const importer = new SpotifyImporter({ cacheEnabled: true });
-
-    const cancelBtn = modal.querySelector('#cancelSpotifyImportBtn');
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        importer.cancel();
-        modal.dataset.cancelRequested = 'true';
-        updateSpotifyImportProgress(100, 'Cancelando importación...');
-      });
-    }
-
-    const result = await importer.importUrl(spotifyUrl, {
-      onProgress: ({ percent, message }) => {
-        updateSpotifyImportProgress(percent || 0, message || 'Procesando...');
-      }
-    });
-
-    if (modal.dataset.cancelRequested === 'true') {
-      notificationSystem.warning('Importación de Spotify cancelada.');
-      return;
-    }
-
-    const title = result.playlistName ? `Importación completada: ${result.playlistName}` : 'Importación completada desde Spotify';
-    notificationSystem.success(`${title}. ${result.importedCount} canciones agregadas.`);
-    showPage('library');
-    await loadLibrary();
-  } catch (error) {
-    console.error('Error importando playlist de Spotify:', error);
-    notificationSystem.error('No se pudo importar la playlist de Spotify');
-  } finally {
-    closeSpotifyImportProgressModal();
-  }
-}
-
-function createYoutubeImportProgressModal() {
-  const existing = document.getElementById('youtubeImportProgressModal');
-  if (existing) return existing;
-
-  const modal = document.createElement('div');
-  modal.id = 'youtubeImportProgressModal';
-  modal.className = 'spotify-import-progress-modal spotify-import-progress-modal--youtube';
-  modal.innerHTML = `
-    <div class="spotify-import-progress-backdrop"></div>
-    <div class="spotify-import-progress-dialog">
-      <div class="spotify-import-progress-header">
-        <div class="spotify-import-progress-title-wrap">
-          <div class="spotify-import-progress-icon spotify-import-progress-icon--youtube">
-            <i class="fab fa-youtube"></i>
-          </div>
-          <div>
-            <strong>Importando playlist de YouTube</strong>
-            <p>Analizando la lista y añadiendo las canciones a tu espacio.</p>
-          </div>
-        </div>
-        <button type="button" id="cancelYoutubeImportBtn" class="spotify-import-cancel-btn">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="spotify-import-progress-body">
-        <div class="spotify-import-progress-meta">
-          <span class="spotify-import-progress-pill">Búsqueda automática</span>
-          <span class="spotify-import-progress-pill">Duración variable</span>
-        </div>
-        <p id="youtubeImportProgressMessage">Preparando importación...</p>
-        <div class="spotify-import-progress-bar">
-          <div class="spotify-import-progress-fill" id="youtubeImportProgressFill"></div>
-        </div>
-        <div class="spotify-import-progress-footer">
-          <span id="youtubeImportProgressPercent">0%</span>
-        </div>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(modal);
-
-  const cancelBtn = modal.querySelector('#cancelYoutubeImportBtn');
-  cancelBtn.addEventListener('click', () => {
-    modal.dataset.cancelRequested = 'true';
+  return require('./services/importDialog').openImportDialog('spotify', {
+    onImported: () => loadLibrary(), onLibrary: () => showPage('library')
   });
-
-  return modal;
-}
-
-function promptYoutubeImportUrl() {
-  return new Promise((resolve) => {
-    const existing = document.getElementById('youtubeImportUrlModal');
-    if (existing) existing.remove();
-
-    const modal = document.createElement('div');
-    modal.id = 'youtubeImportUrlModal';
-    modal.className = 'spotify-import-url-modal spotify-import-url-modal--youtube';
-    modal.innerHTML = `
-      <div class="spotify-import-url-backdrop"></div>
-      <div class="spotify-import-url-dialog">
-        <div class="spotify-import-url-header">
-          <div class="spotify-import-url-title-wrap">
-            <div class="spotify-import-url-icon spotify-import-url-icon--youtube">
-              <i class="fab fa-youtube"></i>
-            </div>
-            <div>
-              <strong>Importar playlist de YouTube</strong>
-              <p>Pega la URL de una playlist pública y la añadiremos a tu biblioteca.</p>
-            </div>
-          </div>
-        </div>
-        <div class="spotify-import-url-body">
-          <label for="youtubePlaylistUrlInput">URL de la playlist</label>
-          <div class="spotify-import-url-input-shell">
-            <i class="fab fa-youtube"></i>
-            <input id="youtubePlaylistUrlInput" type="text" placeholder="https://www.youtube.com/playlist?list=..." autocomplete="off" autocapitalize="none" />
-          </div>
-          <p class="spotify-import-url-hint">Ejemplo: youtube.com/playlist?list=...</p>
-        </div>
-        <div class="spotify-import-url-actions">
-          <button type="button" id="youtubeImportUrlCancelBtn" class="spotify-import-url-button spotify-import-url-cancel">Cancelar</button>
-          <button type="button" id="youtubeImportUrlSubmitBtn" class="spotify-import-url-button spotify-import-url-submit">Importar</button>
-        </div>
-      </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    const input = modal.querySelector('#youtubePlaylistUrlInput');
-    const cancelBtn = modal.querySelector('#youtubeImportUrlCancelBtn');
-    const submitBtn = modal.querySelector('#youtubeImportUrlSubmitBtn');
-    const backdrop = modal.querySelector('.spotify-import-url-backdrop');
-
-    const cleanup = () => {
-      cancelBtn?.removeEventListener('click', onCancel);
-      submitBtn?.removeEventListener('click', onSubmit);
-      backdrop?.removeEventListener('click', onCancel);
-      document.removeEventListener('keydown', onKeyDown);
-      modal.remove();
-    };
-
-    const onCancel = () => { cleanup(); resolve(null); };
-    const onSubmit = () => {
-      const value = input?.value.trim();
-      if (!value) { input?.focus(); return; }
-      cleanup(); resolve(value);
-    };
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') { event.preventDefault(); onCancel(); }
-      if (event.key === 'Enter') { event.preventDefault(); onSubmit(); }
-    };
-
-    cancelBtn?.addEventListener('click', onCancel);
-    submitBtn?.addEventListener('click', onSubmit);
-    backdrop?.addEventListener('click', onCancel);
-    document.addEventListener('keydown', onKeyDown);
-
-    input?.focus();
-  });
-}
-
-function updateYoutubeImportProgress(percent, message) {
-  const modal = document.getElementById('youtubeImportProgressModal');
-  if (!modal) return;
-  const fill = modal.querySelector('#youtubeImportProgressFill');
-  const messageElement = modal.querySelector('#youtubeImportProgressMessage');
-  const percentElement = modal.querySelector('#youtubeImportProgressPercent');
-  if (fill) fill.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
-  if (messageElement) messageElement.textContent = message;
-  if (percentElement) percentElement.textContent = `${Math.min(Math.max(percent, 0), 100)}%`;
-}
-
-function closeYoutubeImportProgressModal() {
-  const modal = document.getElementById('youtubeImportProgressModal');
-  if (modal) modal.remove();
 }
 
 async function openYoutubeImportPrompt() {
-  const youtubeUrl = await promptYoutubeImportUrl();
-  if (!youtubeUrl) return;
-
-  const modal = createYoutubeImportProgressModal();
-  modal.dataset.cancelRequested = 'false';
-  updateYoutubeImportProgress(5, 'Validando URL de YouTube...');
-
-  try {
-    const { YouTubeImporter } = require('./youtubeImporter.js');
-    const importer = new YouTubeImporter({ cacheEnabled: true });
-
-    const cancelBtn = modal.querySelector('#cancelYoutubeImportBtn');
-    if (cancelBtn) {
-      cancelBtn.addEventListener('click', () => {
-        importer.cancel();
-        modal.dataset.cancelRequested = 'true';
-        updateYoutubeImportProgress(100, 'Cancelando importación...');
-      });
-    }
-
-    const result = await importer.importPlaylist(youtubeUrl, {
-      onProgress: ({ percent, message }) => {
-        updateYoutubeImportProgress(percent || 0, message || 'Procesando...');
-      }
-    });
-
-    if (modal.dataset.cancelRequested === 'true') {
-      notificationSystem.warning('Importación de YouTube cancelada.');
-      return;
-    }
-
-    notificationSystem.success(`Playlist importada: ${result.playlistName}. ${result.importedCount} canciones agregadas.`);
-    showPage('library');
-    await loadLibrary();
-  } catch (error) {
-    console.error('Error importando playlist de YouTube:', error);
-    notificationSystem.error('No se pudo importar la playlist de YouTube');
-  } finally {
-    closeYoutubeImportProgressModal();
-  }
+  return require('./services/importDialog').openImportDialog('youtube', {
+    onImported: () => loadLibrary(), onLibrary: () => showPage('library')
+  });
 }
-
 function showPage(pageId) {
   document.querySelectorAll('.page').forEach(page => {
     page.classList.remove('active');
@@ -5497,9 +5625,7 @@ function showPage(pageId) {
   
 
   if (pageId === 'home') {
-    loadLibrary().finally(() => {
-      loadHomeContent();
-    });
+    void refreshHomePage();
   } else if (pageId === 'library') {
     loadLibrary();
   } else if (pageId === 'mymusic') {
@@ -5611,16 +5737,6 @@ async function loadHomeContent() {
   try {
     console.log('Cargando contenido de inicio desde SQLite');
     await loadLibrary();
-    const heroSubtitle = document.querySelector('.hero-subtitle');
-    const heroVisualTitle = document.querySelector('.hero-visual-title');
-    const heroVisualSubtitle = document.querySelector('.hero-visual-subtitle');
-    const heroSearchLabel = document.querySelector('#heroSearchBtn span');
-    const heroMyMusicLabel = document.querySelector('#heroMyMusicBtn span');
-    if (heroSubtitle) heroSubtitle.textContent = 'Descubre tu próxima canción favorita';
-    if (heroVisualTitle) heroVisualTitle.textContent = 'Accesos rápidos';
-    if (heroVisualSubtitle) heroVisualSubtitle.textContent = 'Muévete entre búsqueda y tu música';
-    if (heroSearchLabel) heroSearchLabel.textContent = 'Buscar música';
-    if (heroMyMusicLabel) heroMyMusicLabel.textContent = 'Ir a Mi música';
     const homeData = await ipcRenderer.invoke('get-home-data');
     
     // Update stats in Hero section
@@ -6621,6 +6737,7 @@ async function toggleFavorite(song) {
 }
 
 function updateFavoriteButton(songId, isFavorite) {
+  syncNowPlayingSaveActions();
   document.querySelectorAll('.search-result-card[data-song-id]').forEach(card => {
     if (card.getAttribute('data-song-id') !== String(songId)) return;
     const favoriteBtn = card.querySelector('.favorite-btn');
@@ -6697,6 +6814,890 @@ function addToPlaylist(playlistId, songId) {
 
 // Función showNotification removida - se usa notificationSystem directamente
 
+// Lunera Stream Engine — controles reales de desarrollo.
+// El motor mantiene su configuración canónica en Main; esta vista es sólo un
+// espejo que la edita a través de IPC validado.
+let lseSettingsMirror = null;
+let lseDiagnosticsTimer = null;
+let lseLastAudibleRequestId = null;
+let lseBufferingStartedAt = null;
+
+function getLsePanel() {
+  return document.getElementById('lseDeveloperPanel');
+}
+
+function ensureLseDeveloperPanel() {
+  const toolsGrid = document.querySelector('#developerToolsCard .developer-tools-grid');
+  if (!toolsGrid || getLsePanel()) return;
+
+  const panel = document.createElement('section');
+  panel.id = 'lseDeveloperPanel';
+  panel.className = 'lse-developer-panel';
+  panel.innerHTML = `
+    <div class="lse-panel-head">
+      <div>
+        <span class="lse-panel-kicker"><i class="fas fa-wave-square" aria-hidden="true"></i> Motor nativo</span>
+        <h4>Lunera Stream Engine</h4>
+        <p>Resolución local y de medios directos autorizados, sin depender de yt-dlp.</p>
+      </div>
+      <span id="lseEngineStatus" class="lse-engine-status is-loading">Conectando…</span>
+    </div>
+
+    <div class="lse-setting-group">
+      <div class="lse-setting-group-title">Operación</div>
+      <div class="lse-toggle-grid">
+        <label class="lse-toggle-row"><span><strong>LSE activo</strong><small>Permite resolver fuentes compatibles.</small></span><input data-lse-setting="enabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Streaming habilitado</strong><small>Permite iniciar nuevas resoluciones y reproducciones.</small></span><input data-lse-setting="streamingEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Streaming progresivo</strong><small>Usa rangos HTTP cuando el origen los ofrece.</small></span><input data-lse-setting="progressiveStreamingEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Precarga</strong><small>Prepara la próxima pista de la cola.</small></span><input data-lse-setting="preloadEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Transición anticipada</strong><small>Usa precarga para cambios más fluidos cuando el formato lo permite.</small></span><input data-lse-setting="gaplessEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Caché de metadatos</strong><small>Reutiliza resoluciones seguras no temporales.</small></span><input data-lse-setting="metadataCacheEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Caché multimedia</strong><small>Autoriza la caché local existente cuando corresponde.</small></span><input data-lse-setting="mediaCacheEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Reintentos controlados</strong><small>Reintenta sólo errores recuperables, hasta el límite configurado.</small></span><input data-lse-setting="retryEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Diagnóstico detallado</strong><small>Conserva eventos recientes sin exponer credenciales.</small></span><input data-lse-setting="developerDiagnostics" type="checkbox"></label>
+      </div>
+    </div>
+
+    <div class="lse-setting-group">
+      <div class="lse-setting-group-title">Calidad y recuperación</div>
+      <div class="lse-select-grid">
+        <label>Fallback si LSE no puede resolver<select data-lse-setting="fallbackEngine" class="lse-select"><option value="none">Ninguno</option><option value="yt-dlp">yt-dlp</option><option value="ytdl-core">ytdl-core (legado)</option></select></label>
+        <label>Calidad preferida<select data-lse-setting="qualityMode" class="lse-select"><option value="auto">Automática</option><option value="best">Mejor disponible</option><option value="low">Baja</option><option value="medium">Media</option><option value="high">Alta</option></select></label>
+        <label>Códec preferido<select data-lse-setting="preferredCodec" class="lse-select"><option value="auto">Automático</option><option value="opus">Opus</option><option value="aac">AAC</option><option value="mp3">MP3</option><option value="vorbis">Vorbis</option><option value="flac">FLAC</option><option value="wav">WAV</option></select></label>
+        <label>Prioridad de inicio<select data-lse-setting="startupPriority" class="lse-select"><option value="fast">Velocidad</option><option value="balanced">Equilibrio</option><option value="stable">Estabilidad</option></select></label>
+        <label>Modo de buffer<select data-lse-setting="bufferMode" class="lse-select"><option value="adaptive">Adaptativo</option><option value="low-latency">Baja latencia</option><option value="stable">Estable</option></select></label>
+        <label>Al fallar una fuente<select data-lse-setting="failureRecovery" class="lse-select"><option value="next">Saltar a la siguiente</option><option value="stop">Detener</option></select></label>
+      </div>
+    </div>
+
+    <div class="lse-setting-group">
+      <div class="lse-setting-group-title">Resolución y caché</div>
+      <div class="lse-number-grid">
+        <label>Próximas pistas<input data-lse-setting="preloadTrackCount" type="number" min="0" max="5" step="1"></label>
+        <label>Timeout de resolución (ms)<input data-lse-setting="resolutionTimeoutMs" type="number" min="1000" max="60000" step="500"></label>
+        <label>Timeout de conexión (ms)<input data-lse-setting="connectionTimeoutMs" type="number" min="1000" max="60000" step="500"></label>
+        <label>Reintentos máximos<input data-lse-setting="maxRetries" type="number" min="0" max="5" step="1"></label>
+        <label>Memoria para metadatos (MB)<input data-lse-setting="memoryCacheMB" type="number" min="8" max="512" step="1"></label>
+        <label>Límite de caché en disco (MB)<input data-lse-setting="diskCacheMB" type="number" min="0" max="10240" step="50"></label>
+        <label>Conexiones simultáneas<input data-lse-setting="maxConnections" type="number" min="1" max="8" step="1"></label>
+      </div>
+    </div>
+
+    <div class="lse-live-diagnostics" aria-live="polite">
+      <div class="lse-diagnostics-title"><span><i class="fas fa-chart-line" aria-hidden="true"></i> LSE · Live Diagnostics</span><span id="lseDiagnosticsUpdated" class="lse-updated-label">Sin muestras</span></div>
+      <div class="lse-diagnostics-grid">
+        <div><span>Estado</span><strong data-lse-stat="state">—</strong></div>
+        <div><span>Motor activo</span><strong data-lse-stat="engine">—</strong></div>
+        <div><span>Fuente</span><strong data-lse-stat="source">—</strong></div>
+        <div><span>Resolución</span><strong data-lse-stat="resolution">—</strong></div>
+        <div><span>Primer audio*</span><strong data-lse-stat="firstAudio">—</strong></div>
+        <div><span>Último buffer</span><strong data-lse-stat="buffering">—</strong></div>
+        <div><span>Solicitudes activas</span><strong data-lse-stat="requests">—</strong></div>
+        <div><span>Metadatos en caché</span><strong data-lse-stat="cache">—</strong></div>
+        <div><span>Precargas</span><strong data-lse-stat="preload">—</strong></div>
+        <div><span>Reintentos</span><strong data-lse-stat="retries">—</strong></div>
+        <div><span>Errores recientes</span><strong data-lse-stat="errors">—</strong></div>
+      </div>
+      <p class="lse-diagnostics-note">*Estimado desde el evento <code>playing</code> del navegador; no garantiza por sí solo salida física de audio.</p>
+    </div>
+
+    <div class="lse-extractors-block">
+      <div class="lse-setting-group-title">Extractores instalados</div>
+      <div id="lseExtractorsStatus" class="lse-extractors-status"><span>Consultando extractores…</span></div>
+    </div>
+
+    <div class="lse-direct-test">
+      <div><strong>Probar fuente directa</strong><p>Reproduce en el reproductor habitual una URL HTTP(S) que exponga audio o video directo autorizado.</p></div>
+      <div class="lse-direct-test-controls"><input id="lseDirectSource" type="url" inputmode="url" placeholder="https://ejemplo.com/audio.mp3" autocomplete="off"><button id="lseDirectPlayButton" class="modern-btn secondary" type="button"><i class="fas fa-play"></i><span>Probar en Lunera</span></button></div>
+    </div>
+
+    <div class="lse-json-block">
+      <div class="lse-json-title"><div><strong>Configuración JSON avanzada</strong><p>Se valida antes de guardarse; los campos no válidos se normalizan en Main.</p></div><span id="lseJsonStatus" class="lse-json-status">Sin cambios</span></div>
+      <textarea id="lseSettingsJson" spellcheck="false" aria-label="Configuración JSON de LSE"></textarea>
+      <div class="lse-actions">
+        <button data-lse-action="apply-json" class="modern-btn primary" type="button"><i class="fas fa-code"></i><span>Aplicar JSON</span></button>
+        <button data-lse-action="revert-json" class="modern-btn secondary" type="button"><i class="fas fa-rotate-left"></i><span>Revertir</span></button>
+        <button data-lse-action="export" class="modern-btn secondary" type="button"><i class="fas fa-file-export"></i><span>Exportar</span></button>
+        <button data-lse-action="export-diagnostics" class="modern-btn secondary" type="button"><i class="fas fa-chart-column"></i><span>Informe</span></button>
+        <button data-lse-action="import" class="modern-btn secondary" type="button"><i class="fas fa-file-import"></i><span>Importar</span></button>
+        <button data-lse-action="reset" class="modern-btn secondary" type="button"><i class="fas fa-arrow-rotate-left"></i><span>Valores predeterminados</span></button>
+        <button data-lse-action="clear-cache" class="modern-btn secondary" type="button"><i class="fas fa-broom"></i><span>Limpiar caché LSE</span></button>
+      </div>
+      <input id="lseSettingsImport" type="file" accept="application/json,.json" hidden>
+    </div>
+  `;
+
+  const actions = toolsGrid.querySelector('.developer-tool-actions');
+  if (actions) toolsGrid.insertBefore(panel, actions);
+  else toolsGrid.appendChild(panel);
+
+  bindLseDeveloperPanel(panel);
+  void loadLseDeveloperPanel();
+}
+
+function getLseSettingsFromResponse(response) {
+  return response?.settings && typeof response.settings === 'object' ? response.settings : response;
+}
+
+function bindLseDeveloperPanel(panel) {
+  if (!panel || panel.dataset.bound === 'true') return;
+  panel.dataset.bound = 'true';
+
+  panel.addEventListener('change', (event) => {
+    const control = event.target.closest('[data-lse-setting]');
+    if (!control) return;
+    const key = control.dataset.lseSetting;
+    const value = control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value;
+    void updateLseSettings({ [key]: value }, { announce: true });
+  });
+
+  panel.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-lse-action]')?.dataset.lseAction;
+    if (!action) return;
+    event.preventDefault();
+    if (action === 'apply-json') void applyLseJsonSettings();
+    if (action === 'revert-json') renderLseSettings(lseSettingsMirror);
+    if (action === 'export') void exportLseSettings();
+    if (action === 'export-diagnostics') void exportLseDiagnostics();
+    if (action === 'import') panel.querySelector('#lseSettingsImport')?.click();
+    if (action === 'reset') void resetLseSettings();
+    if (action === 'clear-cache') void clearLseCache();
+  });
+
+  panel.querySelector('#lseSettingsImport')?.addEventListener('change', async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const response = await ipcRenderer.invoke('lse:import-settings', parsed);
+      renderLseSettings(getLseSettingsFromResponse(response));
+      renderLseExtractors(response);
+      notificationSystem.success('Configuración de LSE actualizada');
+      setLseJsonStatus('Importación aplicada', 'success');
+    } catch (error) {
+      setLseJsonStatus(error.message || 'El archivo no contiene JSON válido', 'error');
+      notificationSystem.error('No se pudo importar la configuración de LSE');
+    }
+  });
+
+  panel.querySelector('#lseDirectPlayButton')?.addEventListener('click', () => {
+    void playLseDirectSource();
+  });
+}
+
+async function loadLseDeveloperPanel() {
+  const panel = getLsePanel();
+  if (!panel) return;
+  try {
+    const [settingsResponse, diagnostics, extractors] = await Promise.all([
+      ipcRenderer.invoke('lse:get-settings'),
+      ipcRenderer.invoke('lse:get-diagnostics'),
+      ipcRenderer.invoke('lse:get-extractors')
+    ]);
+    renderLseSettings(getLseSettingsFromResponse(settingsResponse));
+    renderLseDiagnostics(diagnostics);
+    renderLseExtractors(extractors);
+  } catch (error) {
+    setLseEngineStatus('No disponible', 'error');
+    setLseJsonStatus(error.message || 'No se pudo conectar con LSE', 'error');
+  }
+}
+
+async function updateLseSettings(patch, options = {}) {
+  try {
+    const response = await ipcRenderer.invoke('lse:update-settings', patch || {});
+    const settings = getLseSettingsFromResponse(response);
+    renderLseSettings(settings);
+    if (options.announce) notificationSystem.success('Configuración de LSE actualizada');
+    return settings;
+  } catch (error) {
+    setLseJsonStatus(error.message || 'No se pudieron guardar los cambios', 'error');
+    if (options.announce) notificationSystem.error('No se pudo actualizar LSE');
+    throw error;
+  }
+}
+
+function renderLseSettings(settings) {
+  if (!settings || typeof settings !== 'object') return;
+  lseSettingsMirror = { ...settings };
+  const panel = getLsePanel();
+  if (!panel) return;
+  panel.querySelectorAll('[data-lse-setting]').forEach((control) => {
+    const key = control.dataset.lseSetting;
+    if (!(key in lseSettingsMirror)) return;
+    if (control.type === 'checkbox') control.checked = !!lseSettingsMirror[key];
+    else control.value = String(lseSettingsMirror[key]);
+  });
+  const editor = panel.querySelector('#lseSettingsJson');
+  if (editor && document.activeElement !== editor) editor.value = JSON.stringify(lseSettingsMirror, null, 2);
+  setLseEngineStatus(lseSettingsMirror.enabled ? 'Listo' : 'Desactivado', lseSettingsMirror.enabled ? 'ready' : 'muted');
+}
+
+function setLseEngineStatus(label, state = 'ready') {
+  const badge = document.getElementById('lseEngineStatus');
+  if (!badge) return;
+  badge.textContent = label;
+  badge.className = `lse-engine-status is-${state}`;
+}
+
+function setLseJsonStatus(label, state = '') {
+  const status = document.getElementById('lseJsonStatus');
+  if (!status) return;
+  status.textContent = label;
+  status.className = `lse-json-status${state ? ` is-${state}` : ''}`;
+}
+
+function formatLseDuration(value) {
+  const milliseconds = Number(value);
+  return Number.isFinite(milliseconds) && milliseconds >= 0 ? `${Math.round(milliseconds)} ms` : '—';
+}
+
+function readLseDiagnostic(diagnostics, ...paths) {
+  for (const pathValue of paths) {
+    const value = pathValue.split('.').reduce((current, key) => current?.[key], diagnostics);
+    if (value !== undefined && value !== null && value !== '') return value;
+  }
+  return null;
+}
+
+function renderLseDiagnostics(diagnostics = {}) {
+  const panel = getLsePanel();
+  if (!panel || !diagnostics || typeof diagnostics !== 'object') return;
+  const values = {
+    state: readLseDiagnostic(diagnostics, 'status', 'state', 'session.state') || 'En espera',
+    engine: readLseDiagnostic(diagnostics, 'activeEngine', 'engine') || 'LSE',
+    source: readLseDiagnostic(diagnostics, 'lastResult.provider', 'currentSource', 'source.extractor', 'session.extractor') || '—',
+    resolution: formatLseDuration(readLseDiagnostic(diagnostics, 'lastResolutionMs', 'lastResolution.elapsedMs', 'performance.resolutionMs')),
+    firstAudio: formatLseDuration(readLseDiagnostic(diagnostics, 'timeToFirstAudioMs', 'lastResolution.firstAudioMs', 'performance.firstAudioMs')),
+    buffering: formatLseDuration(readLseDiagnostic(diagnostics, 'lastBufferingMs')),
+    requests: `${readLseDiagnostic(diagnostics, 'stats.network.activeRequests', 'network.activeRequests', 'network.active') ?? 0}/${readLseDiagnostic(diagnostics, 'stats.network.maxConnections') ?? '—'}`,
+    cache: String(readLseDiagnostic(diagnostics, 'stats.metadataCache.entries', 'cache.entries', 'cache.size') ?? 0),
+    preload: String(readLseDiagnostic(diagnostics, 'stats.activePreloads', 'preload.pending', 'preload.count') ?? 0),
+    retries: String(readLseDiagnostic(diagnostics, 'stats.retries') ?? 0),
+    errors: String(readLseDiagnostic(diagnostics, 'stats.errors', 'errors.recent', 'errors.count') ?? 0)
+  };
+  Object.entries(values).forEach(([key, value]) => {
+    const element = panel.querySelector(`[data-lse-stat="${key}"]`);
+    if (element) element.textContent = value;
+  });
+  const updated = panel.querySelector('#lseDiagnosticsUpdated');
+  if (updated) updated.textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+}
+
+function renderLseExtractors(payload) {
+  const container = document.getElementById('lseExtractorsStatus');
+  if (!container) return;
+  const extractors = Array.isArray(payload) ? payload : Array.isArray(payload?.extractors) ? payload.extractors : [];
+  container.replaceChildren();
+  if (!extractors.length) {
+    const item = document.createElement('span');
+    item.textContent = 'No se recibieron extractores.';
+    container.appendChild(item);
+    return;
+  }
+  extractors.forEach((extractor) => {
+    const item = document.createElement('div');
+    item.className = `lse-extractor-item${extractor.enabled === false ? ' is-unavailable' : ''}`;
+    const title = document.createElement('strong');
+    title.textContent = extractor.name || extractor.id || 'Extractor';
+    const detail = document.createElement('span');
+    const capabilities = Object.entries(extractor.capabilities || {})
+      .filter(([, value]) => value === true)
+      .map(([key]) => key)
+      .slice(0, 3)
+      .join(' · ');
+    detail.textContent = extractor.lastError
+      ? `Último error: ${extractor.lastError}`
+      : `${extractor.enabled === false ? 'Desactivado' : 'Disponible'}${capabilities ? ` · ${capabilities}` : ''}${extractor.averageResolutionMs ? ` · ${extractor.averageResolutionMs} ms` : ''}`;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'lse-extractor-toggle';
+    toggle.textContent = extractor.enabled === false ? 'Activar' : 'Desactivar';
+    toggle.setAttribute('aria-pressed', String(extractor.enabled !== false));
+    toggle.addEventListener('click', async () => {
+      try {
+        const response = await ipcRenderer.invoke('lse:set-extractor-enabled', extractor.id, extractor.enabled === false);
+        renderLseExtractors(response);
+        notificationSystem.success(`${extractor.name || extractor.id}: ${extractor.enabled === false ? 'activado' : 'desactivado'}`);
+      } catch (error) {
+        notificationSystem.error(error.message || 'No se pudo actualizar el extractor');
+      }
+    });
+    item.append(title, detail, toggle);
+    container.appendChild(item);
+  });
+}
+
+function refreshLseDeveloperPanel() {
+  const panel = getLsePanel();
+  if (!panel) return;
+  if (!state.developerSettings.enabled) {
+    if (lseDiagnosticsTimer) {
+      clearInterval(lseDiagnosticsTimer);
+      lseDiagnosticsTimer = null;
+    }
+    return;
+  }
+  if (!lseDiagnosticsTimer) {
+    lseDiagnosticsTimer = setInterval(() => {
+      ipcRenderer.invoke('lse:get-diagnostics').then(renderLseDiagnostics).catch(() => {});
+    }, 1200);
+  }
+  void loadLseDeveloperPanel();
+}
+
+async function applyLseJsonSettings() {
+  const editor = document.getElementById('lseSettingsJson');
+  if (!editor) return;
+  try {
+    const patch = JSON.parse(editor.value);
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) throw new Error('La configuración debe ser un objeto JSON');
+    await updateLseSettings(patch, { announce: true });
+    setLseJsonStatus('JSON aplicado y validado', 'success');
+  } catch (error) {
+    setLseJsonStatus(error.message || 'JSON inválido', 'error');
+    notificationSystem.error('No se aplicó la configuración JSON');
+  }
+}
+
+async function resetLseSettings() {
+  try {
+    const response = await ipcRenderer.invoke('lse:reset-settings');
+    renderLseSettings(getLseSettingsFromResponse(response));
+    renderLseExtractors(response);
+    setLseJsonStatus('Valores predeterminados restaurados', 'success');
+    notificationSystem.success('LSE se restauró a sus valores predeterminados');
+  } catch (error) {
+    setLseJsonStatus(error.message || 'No se pudieron restaurar los valores', 'error');
+  }
+}
+
+async function clearLseCache() {
+  try {
+    const result = await ipcRenderer.invoke('lse:clear-cache');
+    setLseJsonStatus(`Caché LSE limpiada (${result?.removed ?? 0} elementos)`, 'success');
+    notificationSystem.success('Caché de metadatos de LSE limpiada');
+    const diagnostics = await ipcRenderer.invoke('lse:get-diagnostics');
+    renderLseDiagnostics(diagnostics);
+  } catch (error) {
+    setLseJsonStatus(error.message || 'No se pudo limpiar la caché', 'error');
+  }
+}
+
+async function exportLseSettings() {
+  try {
+    const response = await ipcRenderer.invoke('lse:export-settings');
+    const exportData = response?.settings ? response : { settings: getLseSettingsFromResponse(response) };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'lunera-lse-settings.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    setLseJsonStatus('Configuración exportada', 'success');
+  } catch (error) {
+    setLseJsonStatus(error.message || 'No se pudo exportar', 'error');
+  }
+}
+
+async function exportLseDiagnostics() {
+  try {
+    const diagnostics = await ipcRenderer.invoke('lse:export-diagnostics');
+    const blob = new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'lunera-lse-diagnostics.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    setLseJsonStatus('Informe de diagnóstico exportado', 'success');
+  } catch (error) {
+    setLseJsonStatus(error.message || 'No se pudo exportar el informe', 'error');
+  }
+}
+
+async function playLseDirectSource() {
+  const input = document.getElementById('lseDirectSource');
+  const rawUrl = input?.value.trim();
+  if (!rawUrl) {
+    notificationSystem.info('Ingresa una URL directa de audio o video');
+    return;
+  }
+  if (state.developerSettings.audioExtractor !== 'lse') {
+    notificationSystem.info('Selecciona Lunera Stream Engine como motor preferido para esta prueba');
+    return;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('La fuente debe usar HTTP o HTTPS');
+    await playSong({
+      id: `lse-direct-${Date.now()}`,
+      title: decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || parsed.hostname),
+      artist: 'Fuente directa',
+      thumbnail: '',
+      duration: 0,
+      url: parsed.toString(),
+      isLocal: false
+    });
+  } catch (error) {
+    notificationSystem.error(error.message || 'La URL directa no es válida');
+  }
+}
+
+function bindLseAudibleStartReporter() {
+  if (!elements.audio || elements.audio.dataset.engineAudibleBound === 'true') return;
+  elements.audio.dataset.engineAudibleBound = 'true';
+  const isLteProfile = profile => profile?.extractor === 'lte' || profile?.engine === 'lte';
+  const reportLte = (event, payload = {}) => {
+    if (!activePlaybackRequestId) return;
+    ipcRenderer.invoke('lte:report-playback-event', event, {
+      requestId: activePlaybackRequestId,
+      ...payload
+    }).then(renderLteDiagnostics).catch(() => {});
+  };
+  const markBuffering = () => {
+    const profile = state.audioSettings?.lastStreamingProfile;
+    if (profile?.extractor === 'lse' && activePlaybackRequestId && lseBufferingStartedAt === null) {
+      lseBufferingStartedAt = performance.now();
+    }
+    if (isLteProfile(profile) && activePlaybackRequestId && lteBufferingStartedAt === null) {
+      lteBufferingStartedAt = performance.now();
+    }
+  };
+  elements.audio.addEventListener('waiting', markBuffering);
+  elements.audio.addEventListener('stalled', markBuffering);
+  elements.audio.addEventListener('loadedmetadata', () => {
+    if (isLteProfile(state.audioSettings?.lastStreamingProfile)) {
+      reportLte('metadata-ready', { duration: Number(elements.audio.duration || 0) });
+    }
+  });
+  elements.audio.addEventListener('canplay', () => {
+    if (isLteProfile(state.audioSettings?.lastStreamingProfile)) reportLte('canplay');
+  });
+  elements.audio.addEventListener('playing', () => {
+    const profile = state.audioSettings?.lastStreamingProfile;
+    if (!activePlaybackRequestId) return;
+    if (profile?.extractor === 'lse' && lseBufferingStartedAt !== null) {
+      const durationMs = Math.max(0, Math.round(performance.now() - lseBufferingStartedAt));
+      lseBufferingStartedAt = null;
+      ipcRenderer.invoke('lse:report-buffering', { requestId: activePlaybackRequestId, durationMs }).then(renderLseDiagnostics).catch(() => {});
+    }
+    if (profile?.extractor === 'lse' && lseLastAudibleRequestId !== activePlaybackRequestId) {
+      lseLastAudibleRequestId = activePlaybackRequestId;
+      ipcRenderer.invoke('lse:report-audible-start', {
+        requestId: activePlaybackRequestId,
+        currentTime: Number(elements.audio.currentTime || 0)
+      }).then(renderLseDiagnostics).catch(() => {});
+    }
+    if (isLteProfile(profile)) {
+      if (lteBufferingStartedAt !== null) {
+        const durationMs = Math.max(0, Math.round(performance.now() - lteBufferingStartedAt));
+        lteBufferingStartedAt = null;
+        reportLte('buffering', { durationMs });
+      }
+      if (lteLastPlaybackRequestId !== activePlaybackRequestId) {
+        lteLastPlaybackRequestId = activePlaybackRequestId;
+        reportLte('first-audio', { currentTime: Number(elements.audio.currentTime || 0) });
+      }
+    }
+  });
+  elements.audio.addEventListener('error', () => {
+    if (isLteProfile(state.audioSettings?.lastStreamingProfile)) {
+      reportLte('media-error', { code: Number(elements.audio.error?.code || 0) });
+    }
+  });
+}
+
+// Lunera Turbo Engine — controles del motor de reproducción basado en yt-dlp.
+// Los valores canónicos viven en Main: este panel sólo usa IPCs permitidos y
+// nunca recibe URLs firmadas, cabeceras ni credenciales de los streams.
+let lteSettingsMirror = null;
+let lteDiagnosticsTimer = null;
+let lteLastPlaybackRequestId = null;
+let lteBufferingStartedAt = null;
+
+function getLtePanel() {
+  return document.getElementById('lteDeveloperPanel');
+}
+
+function getLteSettingsFromResponse(response) {
+  return response?.settings && typeof response.settings === 'object' ? response.settings : response;
+}
+
+function ensureLteDeveloperPanel() {
+  const toolsGrid = document.querySelector('#developerToolsCard .developer-tools-grid');
+  if (!toolsGrid || getLtePanel()) return;
+
+  const panel = document.createElement('section');
+  panel.id = 'lteDeveloperPanel';
+  // Reutiliza la composición visual ya validada del panel LSE sin duplicar
+  // estilos ni introducir una segunda página de ajustes.
+  panel.className = 'lse-developer-panel lte-developer-panel';
+  panel.innerHTML = `
+    <div class="lse-panel-head">
+      <div>
+        <span class="lse-panel-kicker"><i class="fas fa-bolt" aria-hidden="true"></i> Streaming optimizado</span>
+        <h4>Lunera Turbo Engine</h4>
+        <p>yt-dlp resuelve una sola vez; Lunera reproduce en progresivo, reutiliza resultados válidos y prepara la cola.</p>
+      </div>
+      <span id="lteEngineStatus" class="lse-engine-status is-loading">Conectando…</span>
+    </div>
+
+    <div class="lse-setting-group">
+      <div class="lse-setting-group-title">Operación</div>
+      <div class="lse-toggle-grid">
+        <label class="lse-toggle-row"><span><strong>Turbo Engine activo</strong><small>Usa LTE como capa rápida sobre yt-dlp.</small></span><input data-lte-setting="enabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Precargar siguientes pistas</strong><small>Resuelve sólo las próximas pistas necesarias.</small></span><input data-lte-setting="preloadEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Cancelar precargas obsoletas</strong><small>Libera red y procesos cuando cambia la cola.</small></span><input data-lte-setting="cancelUnusedPreloads" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Caché de metadatos</strong><small>Guarda datos reutilizables, nunca el audio temporal de YouTube.</small></span><input data-lte-setting="metadataCacheEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Reintentos controlados</strong><small>Reintenta sólo fallos recuperables.</small></span><input data-lte-setting="retryEnabled" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Buffer dinámico</strong><small>Ajusta la recomendación de inicio según la transferencia medida.</small></span><input data-lte-setting="dynamicBuffering" type="checkbox"></label>
+        <label class="lse-toggle-row"><span><strong>Diagnóstico detallado</strong><small>Mide etapas sin exponer enlaces temporales.</small></span><input data-lte-setting="diagnosticsEnabled" type="checkbox"></label>
+      </div>
+    </div>
+
+    <div class="lse-setting-group">
+      <div class="lse-setting-group-title">Calidad y preparación</div>
+      <div class="lse-select-grid">
+        <label>Fallback<select data-lte-setting="fallbackEngine" class="lse-select"><option value="yt-dlp">yt-dlp tradicional</option><option value="lse">LSE (fuentes directas)</option><option value="ytdl-core">ytdl-core (legado)</option><option value="none">Ninguno</option></select></label>
+        <label>Calidad<select data-lte-setting="qualityMode" class="lse-select"><option value="auto">Automática</option><option value="balanced">Equilibrada</option><option value="best">Mejor disponible</option><option value="low">Ahorro de datos</option><option value="manual">Formato manual</option></select></label>
+        <label>Codec preferido<select data-lte-setting="preferredCodec" class="lse-select"><option value="auto">Compatible automáticamente</option><option value="aac">AAC / M4A</option><option value="opus">Opus / WebM</option><option value="mp3">MP3</option><option value="vorbis">Vorbis</option><option value="flac">FLAC directo</option></select></label>
+        <label>Precarga<select data-lte-setting="preloadStrategy" class="lse-select"><option value="adaptive">Adaptativa</option><option value="next">Sólo la siguiente</option><option value="conservative">Conservadora</option></select></label>
+        <label>Buffer<select data-lte-setting="bufferMode" class="lse-select"><option value="adaptive">Adaptativo</option><option value="low-latency">Baja latencia</option><option value="stable">Estable</option></select></label>
+        <label>Prioridad de inicio<select data-lte-setting="startupPriority" class="lse-select"><option value="fast">Velocidad</option><option value="balanced">Equilibrio</option><option value="stable">Estabilidad</option></select></label>
+        <label>Estabilidad<select data-lte-setting="stabilityPriority" class="lse-select"><option value="balanced">Equilibrio</option><option value="fast">Velocidad</option><option value="stable">Estabilidad</option></select></label>
+      </div>
+    </div>
+
+    <div class="lse-setting-group">
+      <div class="lse-setting-group-title">Límites</div>
+      <div class="lse-number-grid">
+        <label>Próximas pistas<input data-lte-setting="preloadTracks" type="number" min="0" max="5" step="1"></label>
+        <label>Timeout de extracción (ms)<input data-lte-setting="extractionTimeoutMs" type="number" min="1000" max="120000" step="500"></label>
+        <label>Extracciones simultáneas<input data-lte-setting="maxConcurrentExtractions" type="number" min="1" max="4" step="1"></label>
+        <label>Reintentos máximos<input data-lte-setting="maxRetries" type="number" min="0" max="3" step="1"></label>
+        <label>TTL metadatos (ms)<input data-lte-setting="metadataCacheTtlMs" type="number" min="15000" max="86400000" step="5000"></label>
+        <label>Formato manual de yt-dlp<input data-lte-setting="manualFormatId" type="text" maxlength="80" placeholder="Ej.: 140" autocomplete="off"></label>
+        <label>Runtime EJS Node (opcional)<input data-lte-setting="jsRuntimePath" type="text" placeholder="C:\\ruta\\node.exe" autocomplete="off"></label>
+      </div>
+    </div>
+
+    <div class="lse-live-diagnostics" aria-live="polite">
+      <div class="lse-diagnostics-title"><span><i class="fas fa-gauge-high" aria-hidden="true"></i> LTE · Diagnóstico real</span><span id="lteDiagnosticsUpdated" class="lse-updated-label">Sin muestras</span></div>
+      <div class="lse-diagnostics-grid">
+        <div><span>Estado</span><strong data-lte-stat="state">—</strong></div>
+        <div><span>yt-dlp</span><strong data-lte-stat="ytDlp">—</strong></div>
+        <div><span>FFmpeg</span><strong data-lte-stat="ffmpeg">—</strong></div>
+        <div><span>EJS</span><strong data-lte-stat="ejs">—</strong></div>
+        <div><span>Resolución media</span><strong data-lte-stat="resolution">—</strong></div>
+        <div><span>Primer audio*</span><strong data-lte-stat="firstAudio">—</strong></div>
+        <div><span>Buffer acumulado</span><strong data-lte-stat="buffering">—</strong></div>
+        <div><span>Transferencia</span><strong data-lte-stat="throughput">—</strong></div>
+        <div><span>Buffer sugerido</span><strong data-lte-stat="bufferTarget">—</strong></div>
+        <div><span>Cola</span><strong data-lte-stat="queue">—</strong></div>
+        <div><span>Precargas</span><strong data-lte-stat="preloads">—</strong></div>
+        <div><span>Reutilizaciones</span><strong data-lte-stat="reuse">—</strong></div>
+        <div><span>Memoria proceso</span><strong data-lte-stat="memory">—</strong></div>
+        <div><span>CPU proceso</span><strong data-lte-stat="cpu">—</strong></div>
+        <div><span>Errores</span><strong data-lte-stat="errors">—</strong></div>
+        <div><span>Comparativa real</span><strong data-lte-stat="benchmark">Sin medir</strong></div>
+      </div>
+      <p class="lse-diagnostics-note">*Es el primer evento <code>playing</code> del navegador; es una estimación, no una medición de salida física.</p>
+    </div>
+
+    <div class="lse-actions">
+        <button data-lte-action="dependencies" data-lte-diagnostic-action class="modern-btn secondary" type="button"><i class="fas fa-plug"></i><span>Comprobar dependencias</span></button>
+      <button data-lte-action="cancel-preloads" class="modern-btn secondary" type="button"><i class="fas fa-ban"></i><span>Cancelar precargas</span></button>
+      <button data-lte-action="clear-metadata" class="modern-btn secondary" type="button"><i class="fas fa-broom"></i><span>Limpiar metadatos</span></button>
+        <button data-lte-action="benchmark" data-lte-diagnostic-action class="modern-btn secondary" type="button"><i class="fas fa-stopwatch"></i><span>Medir pista actual</span></button>
+        <button data-lte-action="cancel-benchmark" data-lte-diagnostic-action class="modern-btn secondary" type="button"><i class="fas fa-stop"></i><span>Cancelar medición</span></button>
+        <button data-lte-action="export" data-lte-diagnostic-action class="modern-btn secondary" type="button"><i class="fas fa-file-export"></i><span>Exportar informe</span></button>
+    </div>
+  `;
+
+  const lsePanel = getLsePanel();
+  const actions = toolsGrid.querySelector('.developer-tool-actions');
+  if (lsePanel) toolsGrid.insertBefore(panel, lsePanel);
+  else if (actions) toolsGrid.insertBefore(panel, actions);
+  else toolsGrid.appendChild(panel);
+  bindLteDeveloperPanel(panel);
+  void loadLteDeveloperPanel();
+}
+
+function bindLteDeveloperPanel(panel) {
+  if (!panel || panel.dataset.bound === 'true') return;
+  panel.dataset.bound = 'true';
+  panel.addEventListener('change', (event) => {
+    const control = event.target.closest('[data-lte-setting]');
+    if (!control) return;
+    const value = control.type === 'checkbox' ? control.checked : control.type === 'number' ? Number(control.value) : control.value;
+    void updateLteSettings({ [control.dataset.lteSetting]: value }, { announce: true });
+  });
+  panel.addEventListener('click', (event) => {
+    const action = event.target.closest('[data-lte-action]')?.dataset.lteAction;
+    if (!action) return;
+    event.preventDefault();
+    if (action === 'dependencies') void refreshLteDependencies(true);
+    if (action === 'cancel-preloads') void cancelLtePreloadsFromPanel();
+    if (action === 'clear-metadata') void clearLteMetadataCache();
+    if (action === 'benchmark') void runLteBenchmarkFromPanel();
+    if (action === 'cancel-benchmark') void cancelLteBenchmarkFromPanel();
+    if (action === 'export') void exportLteDiagnostics();
+  });
+}
+
+async function loadLteDeveloperPanel() {
+  const panel = getLtePanel();
+  if (!panel) return;
+  try {
+    const [settingsResponse, diagnostics] = await Promise.all([
+      ipcRenderer.invoke('lte:get-settings'),
+      ipcRenderer.invoke('lte:get-diagnostics')
+    ]);
+    renderLteSettings(getLteSettingsFromResponse(settingsResponse));
+    renderLteDiagnostics(diagnostics);
+  } catch (error) {
+    setLteEngineStatus('No disponible', 'error');
+  }
+}
+
+async function updateLteSettings(patch, options = {}) {
+  try {
+    const response = await ipcRenderer.invoke('lte:update-settings', patch || {});
+    const settings = getLteSettingsFromResponse(response);
+    renderLteSettings(settings);
+    if (['qualityMode', 'manualFormatId', 'preferredCodec', 'preloadEnabled', 'preloadTracks', 'preloadStrategy'].some(key => Object.prototype.hasOwnProperty.call(patch || {}, key))) {
+      lastPreloadedTrackKey = null;
+      const refresh = shouldCancelUnusedEnginePreloads('lte')
+        ? cancelEnginePreloads('lte')
+        : Promise.resolve(null);
+      void refresh.then(() => {
+        if (state.isPlaying) preloadUpcomingTrack();
+      });
+    }
+    if (Object.prototype.hasOwnProperty.call(patch || {}, 'diagnosticsEnabled')) refreshLteDeveloperPanel();
+    if (options.announce) notificationSystem.success('Configuración de LTE actualizada');
+    return settings;
+  } catch (error) {
+    if (options.announce) notificationSystem.error(error.message || 'No se pudo actualizar LTE');
+    throw error;
+  }
+}
+
+function renderLteSettings(settings) {
+  if (!settings || typeof settings !== 'object') return;
+  lteSettingsMirror = { ...settings };
+  const panel = getLtePanel();
+  if (!panel) return;
+  panel.querySelectorAll('[data-lte-setting]').forEach((control) => {
+    const key = control.dataset.lteSetting;
+    if (!(key in lteSettingsMirror)) return;
+    if (control.type === 'checkbox') control.checked = !!lteSettingsMirror[key];
+    else control.value = String(lteSettingsMirror[key]);
+  });
+  syncLteDiagnosticsVisibility();
+  setLteEngineStatus(lteSettingsMirror.enabled ? 'Listo' : 'Desactivado', lteSettingsMirror.enabled ? 'ready' : 'muted');
+}
+
+function syncLteDiagnosticsVisibility() {
+  const panel = getLtePanel();
+  if (!panel) return;
+  const enabled = lteSettingsMirror?.diagnosticsEnabled !== false;
+  const liveDiagnostics = panel.querySelector('.lse-live-diagnostics');
+  if (liveDiagnostics) liveDiagnostics.hidden = !enabled;
+  panel.querySelectorAll('[data-lte-diagnostic-action]').forEach((control) => {
+    control.hidden = !enabled;
+  });
+  if (!enabled && lteDiagnosticsTimer) {
+    clearInterval(lteDiagnosticsTimer);
+    lteDiagnosticsTimer = null;
+  }
+}
+
+function setLteEngineStatus(label, state = 'ready') {
+  const badge = document.getElementById('lteEngineStatus');
+  if (!badge) return;
+  badge.textContent = label;
+  badge.className = `lse-engine-status is-${state}`;
+}
+
+function lteDiagnosticValue(diagnostics, pathValue, fallback = null) {
+  const value = String(pathValue || '').split('.').reduce((current, key) => current?.[key], diagnostics);
+  return value === undefined || value === null || value === '' ? fallback : value;
+}
+
+function formatLteBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return '—';
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.round(value / 1024)} KB`;
+}
+
+function formatLteRate(bytesPerSecond) {
+  const value = Number(bytesPerSecond);
+  if (!Number.isFinite(value) || value <= 0) return '—';
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB/s`;
+  return `${Math.max(1, Math.round(value / 1024))} KB/s`;
+}
+
+function formatLteBenchmarkSummary(benchmark) {
+  const lte = Number(benchmark?.summary?.lte?.averageTimeToFirstByteMs);
+  const baseline = Number(benchmark?.summary?.baseline?.averageTimeToFirstByteMs);
+  if (!Number.isFinite(lte) || !Number.isFinite(baseline)) return benchmark ? 'Sin dato comparable' : 'Sin medir';
+  const delta = Number(benchmark?.comparison?.averageTimeToFirstByteDeltaMs);
+  const deltaLabel = Number.isFinite(delta) ? ` · Δ ${delta > 0 ? '+' : ''}${Math.round(delta)} ms` : '';
+  return `LTE ${Math.round(lte)} ms / base ${Math.round(baseline)} ms${deltaLabel}`;
+}
+
+function renderLteDiagnostics(diagnostics = {}) {
+  const panel = getLtePanel();
+  if (!panel || !diagnostics || typeof diagnostics !== 'object') return;
+  const value = (pathValue, fallback = null) => lteDiagnosticValue(diagnostics, pathValue, fallback);
+  const duration = amount => formatLseDuration(amount);
+  const activeStream = Array.isArray(diagnostics.streaming?.sessions)
+    ? diagnostics.streaming.sessions[diagnostics.streaming.sessions.length - 1]
+    : null;
+  const liveBuffer = activeStream?.buffer || null;
+  const values = {
+    state: value('status', 'En espera'),
+    ytDlp: value('ytDlp.ytDlp.version') || (value('ytDlp.ytDlp.available') ? 'Disponible' : 'Comprobando'),
+    ffmpeg: value('ytDlp.ffmpeg.available') ? 'Disponible' : 'No disponible',
+    ejs: value('ytDlp.ejs.configured') ? 'Node externo listo' : 'No configurado',
+    resolution: duration(value('performance.average.extractionMs')),
+    firstAudio: duration(value('performance.average.timeToFirstAudioMs')),
+    buffering: duration(value('performance.counters.bufferingMs')),
+    throughput: formatLteRate(liveBuffer?.throughputBps),
+    bufferTarget: Number.isFinite(Number(liveBuffer?.recommendedStartupSeconds)) ? `${Number(liveBuffer.recommendedStartupSeconds).toFixed(2)} s` : '—',
+    queue: `${value('stats.queue.active', 0)} activa · ${value('stats.queue.pending', 0)} pendiente`,
+    preloads: String(value('stats.activePreloads', 0)),
+    reuse: String((Number(value('stats.cacheHits', 0)) || 0) + (Number(value('stats.deduplicatedRequests', 0)) || 0)),
+    memory: formatLteBytes(value('performance.system.rssBytes')),
+    cpu: Number.isFinite(Number(value('performance.system.cpuPercent'))) ? `${Number(value('performance.system.cpuPercent')).toFixed(1)}%` : '—',
+    errors: String(value('stats.errors', 0)),
+    benchmark: formatLteBenchmarkSummary(value('benchmark'))
+  };
+  Object.entries(values).forEach(([key, content]) => {
+    const element = panel.querySelector(`[data-lte-stat="${key}"]`);
+    if (element) element.textContent = content;
+  });
+  const updated = panel.querySelector('#lteDiagnosticsUpdated');
+  if (updated) updated.textContent = `Actualizado ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+}
+
+async function refreshLteDependencies(announce = false) {
+  try {
+    const diagnostics = await ipcRenderer.invoke('lte:check-dependencies');
+    renderLteDiagnostics(diagnostics);
+    if (announce) notificationSystem.success('Dependencias de LTE comprobadas');
+  } catch (error) {
+    if (announce) notificationSystem.error(error.message || 'No se pudieron comprobar las dependencias');
+  }
+}
+
+async function cancelLtePreloadsFromPanel() {
+  try {
+    const result = await ipcRenderer.invoke('lte:cancel-preloads');
+    lastPreloadedTrackKey = null;
+    notificationSystem.info(`${Number(result?.cancelled || 0)} precarga(s) cancelada(s)`);
+    renderLteDiagnostics(await ipcRenderer.invoke('lte:get-diagnostics'));
+  } catch (error) {
+    notificationSystem.error(error.message || 'No se pudieron cancelar las precargas');
+  }
+}
+
+async function clearLteMetadataCache() {
+  try {
+    const result = await ipcRenderer.invoke('lte:clear-metadata-cache');
+    notificationSystem.success(`Metadatos LTE limpiados (${Number(result?.removed || 0)} elementos)`);
+    renderLteDiagnostics(await ipcRenderer.invoke('lte:get-diagnostics'));
+  } catch (error) {
+    notificationSystem.error(error.message || 'No se pudieron limpiar los metadatos');
+  }
+}
+
+async function runLteBenchmarkFromPanel() {
+  const url = resolveRemoteTrackUrl(state.currentTrack);
+  if (!url) {
+    notificationSystem.info('Reproduce o selecciona una pista de YouTube antes de medir LTE');
+    return;
+  }
+
+  try {
+    notificationSystem.info('Midiendo LTE y yt-dlp tradicional con una sonda Range real…');
+    const quality = getEffectivePlaybackQuality();
+    const manualFormatId = quality === 'manual' ? getManualLteFormatId() : '';
+    const result = await ipcRenderer.invoke('lte:run-benchmark', url, {
+      quality,
+      ...(manualFormatId ? { manualFormatId } : {}),
+      runs: 3,
+      includeReuseScenarios: true
+    });
+    renderLteDiagnostics(await ipcRenderer.invoke('lte:get-diagnostics'));
+    const lte = Number(result?.summary?.lte?.averageTimeToFirstByteMs);
+    const baseline = Number(result?.summary?.baseline?.averageTimeToFirstByteMs);
+    const preloaded = Number(result?.scenarios?.preload?.handoff?.timeToFirstByteMs);
+    if (Number.isFinite(lte) && Number.isFinite(baseline)) {
+      const preloadNote = Number.isFinite(preloaded) ? ` · precargada ${Math.round(preloaded)} ms` : '';
+      notificationSystem.success(`Comparativa medida: LTE ${Math.round(lte)} ms · referencia ${Math.round(baseline)} ms${preloadNote}`);
+    } else {
+      notificationSystem.warning('La medición terminó sin dos resultados comparables; revisa el informe LTE');
+    }
+  } catch (error) {
+    const message = error?.code === 'ABORTED' ? 'Medición LTE cancelada' : (error.message || 'No se pudo ejecutar la medición LTE');
+    notificationSystem.warning(message);
+  }
+}
+
+async function cancelLteBenchmarkFromPanel() {
+  try {
+    const result = await ipcRenderer.invoke('lte:cancel-benchmark');
+    notificationSystem.info(result?.cancelled ? 'Cancelando medición LTE…' : 'No hay una medición LTE activa');
+  } catch (error) {
+    notificationSystem.error(error.message || 'No se pudo cancelar la medición LTE');
+  }
+}
+
+async function exportLteDiagnostics() {
+  try {
+    const diagnostics = await ipcRenderer.invoke('lte:export-diagnostics');
+    const blob = new Blob([JSON.stringify(diagnostics, null, 2)], { type: 'application/json' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'lunera-lte-diagnostics.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 0);
+    notificationSystem.success('Informe LTE exportado');
+  } catch (error) {
+    notificationSystem.error(error.message || 'No se pudo exportar el informe LTE');
+  }
+}
+
+function refreshLteDeveloperPanel() {
+  const panel = getLtePanel();
+  if (!panel) return;
+  if (!state.developerSettings.enabled) {
+    if (lteDiagnosticsTimer) {
+      clearInterval(lteDiagnosticsTimer);
+      lteDiagnosticsTimer = null;
+    }
+    return;
+  }
+  const diagnosticsEnabled = lteSettingsMirror?.diagnosticsEnabled !== false;
+  if (!diagnosticsEnabled) {
+    if (lteDiagnosticsTimer) {
+      clearInterval(lteDiagnosticsTimer);
+      lteDiagnosticsTimer = null;
+    }
+    return;
+  }
+  if (!lteDiagnosticsTimer) {
+    lteDiagnosticsTimer = setInterval(() => {
+      ipcRenderer.invoke('lte:get-diagnostics').then(renderLteDiagnostics).catch(() => {});
+    }, 1200);
+  }
+  void loadLteDeveloperPanel();
+}
+
 function formatNumber(num) {
   if (num >= 1000000) {
     return (num / 1000000).toFixed(1) + 'M';
@@ -6711,20 +7712,9 @@ initializeSearch();
 
 // Inicializar página de inicio
 function initializeHomePage() {
-  // Cargar estadísticas del usuario
-  loadUserStats();
-  
-  // Cargar contenido de la página de inicio
-  loadHomeContent();
-  
-  // Inicializar event listeners
+  // Los datos se cargan después de que la biblioteca esté disponible.
   initializeHomeEventListeners();
-  
-  // Inicializar visualizador de música
   initializeMusicVisualizer();
-  
-  // Cargar recomendaciones
-  loadRecommendations();
 }
 
 function loadUserStats() {
@@ -6790,60 +7780,53 @@ function animateNumber(element, targetNumber) {
   requestAnimationFrame(updateNumber);
 }
 
-function loadHomeContent() {
-  const heroSubtitle = document.querySelector('.hero-subtitle');
-  const heroVisualTitle = document.querySelector('.hero-visual-title');
-  const heroVisualSubtitle = document.querySelector('.hero-visual-subtitle');
-  const heroSearchLabel = document.querySelector('#heroSearchBtn span');
-  const heroMyMusicLabel = document.querySelector('#heroMyMusicBtn span');
-  if (heroSubtitle) heroSubtitle.textContent = 'Descubre tu próxima canción favorita';
-  if (heroVisualTitle) heroVisualTitle.textContent = 'Accesos rápidos';
-  if (heroVisualSubtitle) heroVisualSubtitle.textContent = 'Muévete entre búsqueda y tu música';
-  if (heroSearchLabel) heroSearchLabel.textContent = 'Buscar música';
-  if (heroMyMusicLabel) heroMyMusicLabel.textContent = 'Ir a Mi música';
+async function refreshHomePage({ libraryLoaded = false } = {}) {
+  if (!libraryLoaded) await loadLibrary();
 
-  // Cargar canciones recientes
-  displayRecentlyPlayed(state.recentlyPlayed || []);
-  
-  // Cargar recomendaciones
-  displayRecommendations(state.recommendations || []);
-  
-  // Actualizar contadores
-  updateSectionCounters();
   updateUserStats();
+
+  try {
+    const homeData = await ipcRenderer.invoke('get-home-data');
+    const historyEnabled = state.privacySettings?.saveListeningHistory !== false
+      && localStorage.getItem('saveListeningHistory') !== 'false';
+    const databaseRecents = historyEnabled ? (homeData?.recentlyPlayed || []) : [];
+
+    state.recentlyPlayed = historyEnabled
+      ? mergeRecentTracks(databaseRecents, state.recentlyPlayed || [])
+      : [];
+    state.recommendations = homeData?.recommendations || [];
+    localStorage.setItem('recentlyPlayed', JSON.stringify(state.recentlyPlayed));
+
+    displayRecentlyPlayed(state.recentlyPlayed);
+    displayRecommendations(state.recommendations);
+  } catch (error) {
+    console.error('Error actualizando la página de inicio:', error);
+    displayRecentlyPlayed(state.recentlyPlayed || []);
+    displayRecommendations(state.recommendations || []);
+  }
+}
+
+async function loadHomeContent(options = {}) {
+  return refreshHomePage(options);
 }
 
 function initializeHomeEventListeners() {
-  // Botón de reproducción aleatoria
-  const shufflePlayBtn = document.getElementById('shufflePlayBtn');
-  
-  if (shufflePlayBtn) {
-    shufflePlayBtn.addEventListener('click', () => {
-      shufflePlay();
-    });
-  }
-  
   // Botón de actualizar recomendaciones
   const refreshRecommendationsBtn = document.getElementById('refreshRecommendationsBtn');
-  const heroSearchBtn = document.getElementById('heroSearchBtn');
-  const heroMyMusicBtn = document.getElementById('heroMyMusicBtn');
   
-  if (refreshRecommendationsBtn) {
-    refreshRecommendationsBtn.addEventListener('click', () => {
-      loadRecommendations();
-      notificationSystem.info('Recomendaciones actualizadas');
+  if (refreshRecommendationsBtn && !refreshRecommendationsBtn.dataset.bound) {
+    refreshRecommendationsBtn.dataset.bound = 'true';
+    refreshRecommendationsBtn.addEventListener('click', async () => {
+      refreshRecommendationsBtn.disabled = true;
+      try {
+        await loadRecommendations();
+        notificationSystem.info('Recomendaciones actualizadas');
+      } finally {
+        refreshRecommendationsBtn.disabled = false;
+      }
     });
   }
 
-  if (heroSearchBtn && !heroSearchBtn.dataset.bound) {
-    heroSearchBtn.dataset.bound = 'true';
-    heroSearchBtn.addEventListener('click', () => showPage('search'));
-  }
-
-  if (heroMyMusicBtn && !heroMyMusicBtn.dataset.bound) {
-    heroMyMusicBtn.dataset.bound = 'true';
-    heroMyMusicBtn.addEventListener('click', () => showPage('mymusic'));
-  }
 }
 
 function initializeMusicVisualizer() {
@@ -6940,18 +7923,19 @@ function loadRecommendations() {
   displayRecommendations(state.recommendations);
 }
 
-// Version nueva: usa recomendaciones reales del backend basadas en historial y afinidad.
-function loadRecommendations() {
-  ipcRenderer.invoke('get-home-data')
-    .then((homeData) => {
-      state.recommendations = homeData?.recommendations || [];
-      displayRecommendations(state.recommendations);
-    })
-    .catch((error) => {
-      console.error('Error cargando recomendaciones reales:', error);
-      state.recommendations = [];
-      displayRecommendations([]);
-    });
+// Usa recomendaciones reales del backend basadas en historial y afinidad.
+async function loadRecommendations() {
+  try {
+    const homeData = await ipcRenderer.invoke('get-home-data');
+    state.recommendations = homeData?.recommendations || [];
+    displayRecommendations(state.recommendations);
+    return state.recommendations;
+  } catch (error) {
+    console.error('Error cargando recomendaciones reales:', error);
+    state.recommendations = [];
+    displayRecommendations([]);
+    return [];
+  }
 }
 
 
@@ -7154,19 +8138,26 @@ function displayRecentlyPlayed(tracks) {
 function createRecentTrackCard(track, index = 0) {
   const card = document.createElement('div');
   card.className = 'recent-track-card';
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
   const playedDate = getRecentTrackDate(track);
   const timeAgo = getTimeAgo(playedDate || new Date());
   const sourceLabel = track.isLocal ? 'Local' : (track.artist === 'Modo offline' ? 'Caché' : 'Streaming');
+  const title = track.title || 'Sin título';
+  const artist = track.artist || 'Desconocido';
+  const safeTitle = escapeLibraryHTML(title);
+  const safeArtist = escapeLibraryHTML(artist);
+  card.setAttribute('aria-label', `Reproducir ${title} de ${artist}`);
 
   card.innerHTML = `
     <span class="recent-track-order">${String(index + 1).padStart(2, '0')}</span>
     <div class="recent-track-art">
-      ${getArtworkMarkup(getArtworkUrl(track.thumbnail, track.cover), track.title, 'recent-track-image')}
+      ${getArtworkMarkup(getArtworkUrl(track.thumbnail, track.cover), title, 'recent-track-image')}
       <span class="recent-track-play"><i class="fas fa-play"></i></span>
     </div>
     <div class="recent-track-details">
-      <h3 title="${track.title}">${track.title}</h3>
-      <p title="${track.artist || 'Desconocido'}">${track.artist || 'Desconocido'}</p>
+      <h3 title="${safeTitle}">${safeTitle}</h3>
+      <p title="${safeArtist}">${safeArtist}</p>
     </div>
     <div class="recent-track-meta">
       <span class="recent-track-badge">${sourceLabel}</span>
@@ -7174,7 +8165,13 @@ function createRecentTrackCard(track, index = 0) {
     </div>
   `;
 
-  card.addEventListener('click', () => playSong(track));
+  const play = () => playSong(track);
+  card.addEventListener('click', play);
+  card.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    play();
+  });
   return card;
 }
 
@@ -7204,20 +8201,27 @@ function displayRecommendations(recommendations) {
 function createRecommendationCard(recommendation) {
   const card = document.createElement('div');
   card.className = 'recommendation-card';
+  card.tabIndex = 0;
+  card.setAttribute('role', 'button');
+  const title = recommendation.title || 'Nueva recomendación';
+  const description = [recommendation.artist, recommendation.genre].filter(Boolean).join(' · ') || 'Nueva recomendación';
+  const safeTitle = escapeLibraryHTML(title);
+  const safeDescription = escapeLibraryHTML(description);
+  card.setAttribute('aria-label', `Reproducir recomendación: ${title}`);
 
   card.innerHTML = `
     <div class="recommendation-art">
-      ${getArtworkMarkup(recommendation.thumbnail, recommendation.title, 'recommendation-image')}
+      ${getArtworkMarkup(recommendation.thumbnail, title, 'recommendation-image')}
       <span><i class="fas fa-play"></i></span>
     </div>
     <div class="recommendation-info">
-      <h3>${recommendation.title}</h3>
-      <p>${[recommendation.artist, recommendation.genre].filter(Boolean).join(' · ') || 'Nueva recomendación'}</p>
+      <h3>${safeTitle}</h3>
+      <p>${safeDescription}</p>
     </div>
     <i class="fas fa-chevron-right recommendation-arrow"></i>
   `;
 
-  card.addEventListener('click', async () => {
+  const playRecommendation = async () => {
     let videoId = recommendation.id || recommendation.video_id;
     let url = recommendation.url;
     const valid = videoId && /^[a-zA-Z0-9-_]{11}$/.test(videoId);
@@ -7252,6 +8256,13 @@ function createRecommendationCard(recommendation) {
       url: url || (videoId ? `https://www.youtube.com/watch?v=${videoId}` : null),
       isLocal: false
     });
+  };
+
+  card.addEventListener('click', playRecommendation);
+  card.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    void playRecommendation();
   });
 
   return card;
@@ -7531,87 +8542,380 @@ function loadMyMusicContent() {
   }
 
   const localTracks = Array.isArray(state.localMusic) ? state.localMusic : [];
-  container.innerHTML = '';
+  const { tracks, query } = getVisibleMyMusicTracks(localTracks);
+  updateMyMusicSummary(localTracks);
+  container.replaceChildren();
 
   if (localTracks.length === 0) {
-    container.innerHTML = `
-      <div class="empty-state" style="grid-column: 1 / -1; text-align: center; padding: 3rem 2rem; color: var(--text-secondary); position: relative; z-index: 2;">
-        <i class="fas fa-music" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1.5rem; display: block;"></i>
-        <h3 style="color: var(--text-primary); margin-bottom: 1rem; font-size: 1.5rem; font-weight: 700;">No hay música local subida</h3>
-        <p style="margin-bottom: 1.5rem; font-size: 1rem; opacity: 0.8;">Sube canciones desde "Subir Música" para verlas aquí.</p>
-        <button class="library-create-btn" onclick="document.querySelector('[data-page=\"upload\"]').click()">
-          <i class="fas fa-upload"></i>
-          Subir Música
-        </button>
-      </div>
-    `;
+    container.appendChild(createMyMusicEmptyState());
     return;
   }
 
-  const myMusicTotalSongs = document.getElementById('myMusicTotalSongs');
-
-  if (myMusicTotalSongs) {
-    myMusicTotalSongs.textContent = `${localTracks.length} canción${localTracks.length > 1 ? 'es' : ''}`;
+  if (tracks.length === 0) {
+    container.appendChild(createMyMusicEmptyState({ query }));
+    return;
   }
 
-  localTracks.forEach((song) => {
-    container.appendChild(createMyMusicCard(song));
+  tracks.forEach((song, index) => {
+    const card = createMyMusicCard(song);
+    card.style.setProperty('--my-music-delay', `${index * 32}ms`);
+    container.appendChild(card);
   });
 }
 
 function createMyMusicCard(song) {
-  const card = document.createElement('div');
+  const card = document.createElement('article');
   card.className = 'my-music-card';
+  card.tabIndex = 0;
+  card.setAttribute('role', 'group');
 
   const title = song.title || 'Título desconocido';
   const artist = song.artist || 'Artista desconocido';
   const thumbnail = getArtworkUrl(song.thumbnail, song.cover);
-  const addedLabel = song.added_at ? new Date(song.added_at).toLocaleDateString() : 'Sin fecha';
+  const identifier = getLocalMusicIdentifier(song);
+  const safeTitle = escapeLibraryHTML(title);
+  const safeArtist = escapeLibraryHTML(artist);
+  const addedDate = song.added_at ? new Date(song.added_at) : null;
+  const hasAddedDate = addedDate && !Number.isNaN(addedDate.getTime());
+  const addedLabel = hasAddedDate
+    ? addedDate.toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'Sin fecha';
+  const addedDateTime = hasAddedDate ? addedDate.toISOString() : '';
+  const format = getLocalMusicFormat(song);
+  const size = formatLocalMusicBytes(song.file_size);
+  card.dataset.trackId = identifier;
+  card.setAttribute('aria-label', `${title}, ${artist}`);
+  if (state.currentTrack?.isLocal && getLocalMusicIdentifier(state.currentTrack) === identifier) {
+    card.classList.add('is-current');
+  }
 
   card.innerHTML = `
-    <button class="delete-library-btn visible" title="Eliminar de mi música">
-      <i class="fas fa-trash"></i>
-    </button>
-    <div class="my-music-card-info">
+    <div class="my-music-card-art">
       ${getArtworkMarkup(thumbnail, title, 'my-music-card-image')}
-      <div class="my-music-card-details">
-        <div class="my-music-card-topline">
-          <span class="my-music-origin">Subida local</span>
-          <span class="my-music-added">${addedLabel}</span>
-        </div>
-        <h3 title="${title}">${title}</h3>
-        <p title="${artist}">${artist}</p>
+      <span class="my-music-local-badge"><i class="fas fa-hard-drive" aria-hidden="true"></i> Local</span>
+    </div>
+    <div class="my-music-card-copy">
+      <div class="my-music-card-title-row">
+        <h3 title="${safeTitle}">${safeTitle}</h3>
+        <span class="my-music-playing-dot" aria-hidden="true"></span>
       </div>
+      <p title="${safeArtist}">${safeArtist}</p>
+      <div class="my-music-card-meta">
+        <span><i class="fas fa-file-audio" aria-hidden="true"></i>${escapeLibraryHTML(format)}</span>
+        <span><i class="fas fa-database" aria-hidden="true"></i>${escapeLibraryHTML(size)}</span>
+      </div>
+    </div>
+    <div class="my-music-card-date">
+      <span>Agregada</span>
+      <time datetime="${escapeLibraryHTML(addedDateTime)}">${escapeLibraryHTML(addedLabel)}</time>
+    </div>
+    <div class="my-music-card-actions">
+      <button class="my-music-card-action my-music-play-button" type="button" title="Reproducir ${safeTitle}" aria-label="Reproducir ${safeTitle}">
+        <i class="fas fa-play" aria-hidden="true"></i><span>Reproducir</span>
+      </button>
+      <button class="my-music-card-action my-music-remove-button" type="button" title="Eliminar ${safeTitle}" aria-label="Eliminar ${safeTitle}">
+        <i class="fas fa-trash" aria-hidden="true"></i><span class="sr-only">Eliminar</span>
+      </button>
     </div>
   `;
 
-  const infoDiv = card.querySelector('.my-music-card-info');
-  infoDiv.addEventListener('click', (e) => {
-    e.preventDefault();
-    playSong({
-      ...song,
-      isLocal: true,
-      id: song.id || song.video_id,
-      video_id: song.video_id || song.id
+  const play = () => {
+    document.querySelectorAll('.my-music-page .my-music-card.is-current').forEach((currentCard) => {
+      currentCard.classList.remove('is-current');
     });
+    card.classList.add('is-current');
+    playMyMusicTrack(song);
+  };
+  card.addEventListener('click', (event) => {
+    if (event.target.closest('button')) return;
+    play();
+  });
+  card.addEventListener('keydown', (event) => {
+    if (event.target !== card || (event.key !== 'Enter' && event.key !== ' ')) return;
+    event.preventDefault();
+    play();
   });
 
-  const deleteBtn = card.querySelector('.delete-library-btn');
-  deleteBtn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    if (confirm(`¿Estás seguro de que quieres eliminar "${title}" de tu música subida?`)) {
-      await ipcRenderer.invoke('remove-local-music', song.video_id || song.id);
-      await loadLocalMusic();
-      notificationSystem.info(`${title} eliminado de tu música`);
-    }
+  card.querySelector('.my-music-play-button')?.addEventListener('click', play);
+  card.querySelector('.my-music-remove-button')?.addEventListener('click', () => {
+    void removeMyMusicTrack(song, card);
   });
 
   return card;
 }
 
 function loadMyMusicPage() {
-  console.log('Cargando página Mi Música');
-  loadLocalMusic();
+  return loadLocalMusic();
+}
+
+function getLocalMusicIdentifier(song = {}) {
+  const identifier = song.video_id || song.id;
+  return identifier === undefined || identifier === null ? '' : String(identifier);
+}
+
+function getLocalMusicFormat(song = {}) {
+  const fromMimeType = typeof song.file_type === 'string' ? song.file_type.split('/').pop() : '';
+  const fromPath = typeof song.local_path === 'string' ? song.local_path.split('.').pop() : '';
+  const rawFormat = fromMimeType || fromPath || 'audio';
+  return rawFormat.replace(/^x-/, '').toUpperCase();
+}
+
+function formatLocalMusicBytes(rawBytes) {
+  const bytes = Number(rawBytes);
+  if (!Number.isFinite(bytes) || bytes <= 0) return 'Archivo local';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / (1024 ** exponent);
+  return `${value >= 10 || exponent === 0 ? Math.round(value) : value.toFixed(1)} ${units[exponent]}`;
+}
+
+function getVisibleMyMusicTracks(localTracks) {
+  const searchInput = document.getElementById('myMusicSearchInput');
+  const sortSelect = document.getElementById('myMusicSortSelect');
+  const query = (searchInput?.value || '').trim();
+  const normalizedQuery = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('es');
+  const collator = new Intl.Collator('es', { sensitivity: 'base' });
+  const tracks = localTracks
+    .filter((track) => {
+      if (!normalizedQuery) return true;
+      const searchableText = [track.title, track.artist, track.album]
+        .filter(Boolean)
+        .join(' ')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase('es');
+      return searchableText.includes(normalizedQuery);
+    })
+    .slice();
+
+  if (sortSelect?.value === 'title') {
+    tracks.sort((a, b) => collator.compare(a.title || '', b.title || ''));
+  } else if (sortSelect?.value === 'artist') {
+    tracks.sort((a, b) => collator.compare(a.artist || '', b.artist || ''));
+  } else {
+    tracks.sort((a, b) => new Date(b.added_at || 0) - new Date(a.added_at || 0));
+  }
+
+  return { tracks, query };
+}
+
+function updateMyMusicSummary(localTracks) {
+  const count = localTracks.length;
+  const totalBytes = localTracks.reduce((total, track) => total + (Number(track.file_size) || 0), 0);
+  const countLabel = `${count} canción${count === 1 ? '' : 'es'} guardada${count === 1 ? '' : 's'}`;
+  const totalSongs = document.getElementById('myMusicTotalSongs');
+  const storageInfo = document.getElementById('myMusicStorageInfo');
+  const shuffleButton = document.getElementById('myMusicShuffleBtn');
+
+  if (totalSongs) totalSongs.textContent = countLabel;
+  if (storageInfo) storageInfo.textContent = count ? `${formatLocalMusicBytes(totalBytes)} en tu dispositivo` : 'Lista para tu primera canción';
+  if (shuffleButton) shuffleButton.disabled = count === 0;
+}
+
+function createMyMusicEmptyState({ query = '' } = {}) {
+  const emptyState = document.createElement('div');
+  const isFiltered = Boolean(query);
+  emptyState.className = `my-music-empty-state${isFiltered ? ' is-filtered' : ''}`;
+  emptyState.innerHTML = isFiltered
+    ? `
+      <span class="my-music-empty-icon"><i class="fas fa-magnifying-glass" aria-hidden="true"></i></span>
+      <h3>No encontramos “${escapeLibraryHTML(query)}”</h3>
+      <p>Prueba con el título, artista o álbum de otra canción.</p>
+      <button type="button" class="my-music-empty-action secondary"><i class="fas fa-xmark" aria-hidden="true"></i> Limpiar búsqueda</button>
+    `
+    : `
+      <span class="my-music-empty-icon"><i class="fas fa-compact-disc" aria-hidden="true"></i></span>
+      <h3>Tu colección empieza aquí</h3>
+      <p>Agrega archivos de música para escucharlos en Lunera cuando quieras.</p>
+      <button type="button" class="my-music-empty-action"><i class="fas fa-plus" aria-hidden="true"></i> Agregar mi primera canción</button>
+    `;
+
+  emptyState.querySelector('button')?.addEventListener('click', () => {
+    if (isFiltered) {
+      const input = document.getElementById('myMusicSearchInput');
+      if (input) input.value = '';
+      syncMyMusicSearchClearButton();
+      loadMyMusicContent();
+      input?.focus();
+      return;
+    }
+    openUploadPage();
+  });
+  return emptyState;
+}
+
+function normalizeLocalMusicTrack(track) {
+  return {
+    ...track,
+    isLocal: true,
+    id: track.id || track.video_id,
+    video_id: track.video_id || track.id
+  };
+}
+
+function playMyMusicTrack(song) {
+  const currentPlaylist = (state.localMusic || []).map(normalizeLocalMusicTrack);
+  const identifier = getLocalMusicIdentifier(song);
+  const index = currentPlaylist.findIndex((track) => getLocalMusicIdentifier(track) === identifier);
+  const track = currentPlaylist[index === -1 ? 0 : index] || normalizeLocalMusicTrack(song);
+
+  state.currentPlaylist = currentPlaylist;
+  state.currentPlaylistId = null;
+  state.currentIndex = Math.max(index, 0);
+  void playSong(track);
+}
+
+function shuffleMyMusic() {
+  const localTracks = (state.localMusic || []).map(normalizeLocalMusicTrack);
+  if (localTracks.length === 0) {
+    notificationSystem.info('Agrega música local antes de mezclarla');
+    return;
+  }
+
+  for (let index = localTracks.length - 1; index > 0; index -= 1) {
+    const randomIndex = Math.floor(Math.random() * (index + 1));
+    [localTracks[index], localTracks[randomIndex]] = [localTracks[randomIndex], localTracks[index]];
+  }
+
+  state.currentPlaylist = localTracks;
+  state.currentPlaylistId = null;
+  state.currentIndex = 0;
+  void playSong(localTracks[0]);
+  notificationSystem.info('Reproduciendo tu música en modo aleatorio');
+}
+
+async function removeMyMusicTrack(song, card) {
+  const identifier = getLocalMusicIdentifier(song);
+  if (!identifier) {
+    notificationSystem.error('No encontramos el identificador de esta canción');
+    return;
+  }
+
+  const confirmed = await confirmMyMusicRemoval(song.title || 'esta canción');
+  if (!confirmed) return;
+
+  const removeButton = card.querySelector('.my-music-remove-button');
+  card.classList.add('is-removing');
+  if (removeButton) removeButton.disabled = true;
+
+  try {
+    const result = await ipcRenderer.invoke('remove-local-music', identifier);
+    if (!result?.ok || !result.deleted) {
+      throw new Error('La canción ya no estaba disponible para eliminar');
+    }
+
+    await loadLocalMusic();
+    notificationSystem.success(`${song.title || 'La canción'} se eliminó de Mi Música`);
+  } catch (error) {
+    console.error('Error eliminando música local:', error);
+    card.classList.remove('is-removing');
+    if (removeButton) removeButton.disabled = false;
+    notificationSystem.error(error.message || 'No se pudo eliminar la canción');
+  }
+}
+
+function confirmMyMusicRemoval(title) {
+  return new Promise((resolve) => {
+    const previousFocus = document.activeElement;
+    const modal = document.createElement('div');
+    modal.className = 'my-music-remove-modal';
+    modal.innerHTML = `
+      <section class="my-music-remove-dialog" role="dialog" aria-modal="true" aria-labelledby="myMusicRemoveTitle" aria-describedby="myMusicRemoveDescription">
+        <span class="my-music-remove-icon"><i class="fas fa-trash" aria-hidden="true"></i></span>
+        <span class="my-music-remove-kicker">Eliminar de Mi Música</span>
+        <h3 id="myMusicRemoveTitle">¿Quitar esta canción?</h3>
+        <p id="myMusicRemoveDescription">Se eliminará de la colección local de Lunera. Esta acción no se puede deshacer.</p>
+        <strong class="my-music-remove-track"></strong>
+        <div class="my-music-remove-actions">
+          <button type="button" class="my-music-dialog-button secondary" data-my-music-cancel>Cancelar</button>
+          <button type="button" class="my-music-dialog-button danger" data-my-music-confirm><i class="fas fa-trash" aria-hidden="true"></i> Eliminar canción</button>
+        </div>
+      </section>
+    `;
+    modal.querySelector('.my-music-remove-track').textContent = title;
+    document.body.appendChild(modal);
+
+    const cancelButton = modal.querySelector('[data-my-music-cancel]');
+    const confirmButton = modal.querySelector('[data-my-music-confirm]');
+    const close = (answer) => {
+      document.removeEventListener('keydown', onKeyDown);
+      modal.remove();
+      previousFocus?.focus?.();
+      resolve(answer);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        close(false);
+      }
+      if (event.key === 'Tab') {
+        const focusable = [cancelButton, confirmButton];
+        const currentIndex = focusable.indexOf(document.activeElement);
+        if (event.shiftKey && currentIndex <= 0) {
+          event.preventDefault();
+          confirmButton.focus();
+        } else if (!event.shiftKey && currentIndex === focusable.length - 1) {
+          event.preventDefault();
+          cancelButton.focus();
+        }
+      }
+    };
+
+    cancelButton.addEventListener('click', () => close(false));
+    confirmButton.addEventListener('click', () => close(true));
+    modal.addEventListener('click', (event) => {
+      if (event.target === modal) close(false);
+    });
+    document.addEventListener('keydown', onKeyDown);
+    requestAnimationFrame(() => {
+      modal.classList.add('is-visible');
+      cancelButton.focus();
+    });
+  });
+}
+
+function syncMyMusicSearchClearButton() {
+  const input = document.getElementById('myMusicSearchInput');
+  const clearButton = document.getElementById('myMusicClearSearch');
+  if (clearButton) clearButton.hidden = !(input?.value || '').trim();
+}
+
+function initializeMyMusicControls() {
+  const searchInput = document.getElementById('myMusicSearchInput');
+  const clearSearchButton = document.getElementById('myMusicClearSearch');
+  const sortSelect = document.getElementById('myMusicSortSelect');
+  const shuffleButton = document.getElementById('myMusicShuffleBtn');
+  const uploadButton = document.getElementById('uploadMusicBtn');
+
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = 'true';
+    searchInput.addEventListener('input', () => {
+      syncMyMusicSearchClearButton();
+      loadMyMusicContent();
+    });
+  }
+  if (clearSearchButton && !clearSearchButton.dataset.bound) {
+    clearSearchButton.dataset.bound = 'true';
+    clearSearchButton.addEventListener('click', () => {
+      if (searchInput) searchInput.value = '';
+      syncMyMusicSearchClearButton();
+      loadMyMusicContent();
+      searchInput?.focus();
+    });
+  }
+  if (sortSelect && !sortSelect.dataset.bound) {
+    sortSelect.dataset.bound = 'true';
+    sortSelect.addEventListener('change', loadMyMusicContent);
+  }
+  if (shuffleButton && !shuffleButton.dataset.bound) {
+    shuffleButton.dataset.bound = 'true';
+    shuffleButton.addEventListener('click', shuffleMyMusic);
+  }
+  if (uploadButton && !uploadButton.dataset.bound) {
+    uploadButton.dataset.bound = 'true';
+    uploadButton.addEventListener('click', openUploadPage);
+  }
+  syncMyMusicSearchClearButton();
 }
 
 function createLibrarySongCard(song) {
@@ -8232,6 +9536,7 @@ function addToQueue(track) {
 
   if (!isDuplicate) {
     state.queue.push(track);
+    refreshEnginePreloadsForQueue();
     updateQueueUI();
     notificationSystem.success(`${track.title} agregada a la cola`);
     console.log(`Canción añadida a cola: ${track.title}`);
@@ -8247,6 +9552,7 @@ function removeFromQueue(index) {
   if (index >= 0 && index < state.queue.length) {
     const removedTrack = state.queue[index];
     state.queue.splice(index, 1);
+    refreshEnginePreloadsForQueue();
     updateQueueUI();
     notificationSystem.info(`${removedTrack.title} eliminada de la cola`);
     console.log(`Canción eliminada de cola: ${removedTrack.title}`);
@@ -8255,6 +9561,7 @@ function removeFromQueue(index) {
 
 function clearQueue() {
   state.queue = [];
+  refreshEnginePreloadsForQueue();
   updateQueueUI();
   notificationSystem.info('Cola limpiada');
   console.log('Cola limpiada');
@@ -8262,6 +9569,7 @@ function clearQueue() {
 
 function toggleQueueLoop() {
   state.queueLoop = !state.queueLoop;
+  refreshEnginePreloadsForQueue();
   const queueLoopButton = document.getElementById('queueLoopButton');
   if (queueLoopButton) {
     queueLoopButton.classList.toggle('active');
@@ -8722,22 +10030,75 @@ async function showPlaylistSelector(track) {
     return;
   }
 
+  document.querySelector('.playlist-selector-modal')?.remove();
+
+  const previousFocus = document.activeElement;
   const modal = document.createElement('div');
-  modal.className = 'playlist-modal';
+  modal.className = 'playlist-modal playlist-selector-modal';
   modal.innerHTML = `
-    <div class="modal-content">
-      <h3>Añadir "${track.title}" a una playlist</h3>
-      <ul id="playlistList"></ul>
-      <button class="close-modal">Cerrar</button>
-    </div>
+    <div class="playlist-selector-backdrop" aria-hidden="true"></div>
+    <section class="modal-content playlist-selector-dialog" role="dialog" aria-modal="true" aria-labelledby="playlistSelectorTitle" aria-describedby="playlistSelectorDescription">
+      <span class="playlist-selector-aura" aria-hidden="true"></span>
+      <button class="playlist-selector-close" type="button" aria-label="Cerrar selector de playlist">
+        <i class="fas fa-xmark" aria-hidden="true"></i>
+      </button>
+      <header class="playlist-selector-header">
+        <span class="playlist-selector-eyebrow"><i class="fas fa-bookmark" aria-hidden="true"></i> Guardar en colección</span>
+        <h3 id="playlistSelectorTitle">Añadir a una playlist</h3>
+        <p id="playlistSelectorDescription">Elige dónde quieres guardar esta canción.</p>
+      </header>
+      <div class="playlist-selector-track" aria-label="Canción seleccionada">
+        <span class="playlist-selector-track-art" aria-hidden="true"><i class="fas fa-music"></i></span>
+        <span class="playlist-selector-track-copy">
+          <small>Canción seleccionada</small>
+          <strong>${escapeLibraryHTML(track.title || 'Sin título')}</strong>
+          <span>${escapeLibraryHTML(track.artist || 'Artista desconocido')}</span>
+        </span>
+      </div>
+      <div class="playlist-selector-list-wrap">
+        <span class="playlist-selector-list-label">Tus playlists</span>
+        <ul id="playlistList" class="playlist-selector-list"></ul>
+      </div>
+      <button class="close-modal playlist-selector-cancel" type="button">Cancelar</button>
+    </section>
   `;
   document.body.appendChild(modal);
   console.log('[dev] Modal de playlist creado y agregado al DOM');
 
-  const playlistList = document.getElementById('playlistList');
-  state.playlists.forEach(playlist => {
+  const playlistList = modal.querySelector('#playlistList');
+  const closeButton = modal.querySelector('.playlist-selector-close');
+  const cancelButton = modal.querySelector('.playlist-selector-cancel');
+  const reduceMotion = isMotionReduced();
+  let isClosing = false;
+
+  const closeSelector = () => {
+    if (isClosing) return;
+    isClosing = true;
+    modal.classList.add('is-closing');
+    document.removeEventListener('keydown', handleKeydown);
+    window.setTimeout(() => {
+      modal.remove();
+      previousFocus?.focus?.();
+    }, reduceMotion ? 0 : 180);
+  };
+
+  const handleKeydown = event => {
+    if (event.key === 'Escape') closeSelector();
+  };
+
+  state.playlists.forEach((playlist, index) => {
     const li = document.createElement('li');
-    li.innerHTML = `<button data-id="${playlist.id}">${playlist.name}</button>`;
+    li.style.setProperty('--playlist-item-delay', `${index * 42}ms`);
+    li.innerHTML = `
+      <button type="button" data-id="${escapeLibraryHTML(playlist.id)}">
+        <span class="playlist-selector-item-icon" aria-hidden="true"><i class="fas fa-list-music"></i></span>
+        <span class="playlist-selector-item-copy">
+          <strong>${escapeLibraryHTML(playlist.name || 'Playlist sin nombre')}</strong>
+          <small>Guardar aquí</small>
+        </span>
+        <i class="fas fa-arrow-right playlist-selector-item-arrow" aria-hidden="true"></i>
+      </button>
+    `;
     playlistList.appendChild(li);
   });
 
@@ -8746,11 +10107,13 @@ async function showPlaylistSelector(track) {
     if (btn) {
       const playlistId = parseInt(btn.dataset.id);
       console.log('Intentando añadir a playlist:', playlistId, track);
+      playlistList.classList.add('is-saving');
+      playlistList.querySelectorAll('button').forEach(button => { button.disabled = true; });
       try {
         const result = await ipcRenderer.invoke('add-to-playlist', playlistId, track);
         console.log('Resultado del IPC:', result);
         if (result) {
-          notificationSystem.success(`Añadido a ${btn.textContent}`);
+          notificationSystem.success(`Añadido a ${btn.querySelector('strong')?.textContent || 'la playlist'}`);
           // Recargar biblioteca y verificar que se guardó
           await loadLibrary();
           // Verificar que la canción se guardó
@@ -8762,11 +10125,15 @@ async function showPlaylistSelector(track) {
         console.error('Error al añadir a la playlist:', error);
         notificationSystem.error('Error al añadir a la playlist');
       }
-      modal.remove();
+      closeSelector();
     }
   });
 
-  modal.querySelector('.close-modal').addEventListener('click', () => modal.remove());
+  modal.querySelector('.playlist-selector-backdrop').addEventListener('click', closeSelector);
+  closeButton.addEventListener('click', closeSelector);
+  cancelButton.addEventListener('click', closeSelector);
+  document.addEventListener('keydown', handleKeydown);
+  window.setTimeout(() => closeButton.focus(), 0);
 }
 
 // Función para verificar que la canción se agregó a la playlist
@@ -9027,77 +10394,175 @@ async function toggleVisualizer() {
   console.log('Visualizador cambiado:', state.visualSettings.showVisualizer);
 }
 
+function resetRendererAfterDataDeletion() {
+  if (elements.audio) {
+    elements.audio.pause();
+    elements.audio.removeAttribute('src');
+    elements.audio.load();
+  }
+
+  activePlaybackRequestId = null;
+  audioRecoveryInProgress = false;
+  audioRecoveryAttempts = 0;
+  stopSpectrogram();
+
+  state.currentTrack = null;
+  state.isPlaying = false;
+  state.playerUiState = 'empty';
+  state.queue = [];
+  state.queueLoop = false;
+  state.currentIndex = -1;
+  state.shuffle = false;
+  state.repeat = 'none';
+  state.library = [];
+  state.localMusic = [];
+  state.favorites = [];
+  state.playlists = [];
+  state.searchResults = [];
+  state.recentlyPlayed = [];
+  state.recommendations = [];
+  state.currentPlaylist = null;
+  state.currentPlaylistId = null;
+  state.settings = { showGif: false, gifUrl: null };
+  state.visualSettings = {
+    showVisualizer: true,
+    theme: 'dark',
+    accentColor: '#1db954',
+    interfaceMode: 'classic',
+    spectrogramOpacity: 0.4,
+    effectsIntensity: 70,
+    panelOpacity: 92,
+    animationQuality: 'balanced',
+    compactMode: false,
+    reduceMotion: false
+  };
+  state.audioSettings = {
+    normalizeVolume: false,
+    streamingQuality: 'medium',
+    lastStreamingProfile: null,
+    equalizerPreamp: 0,
+    equalizerQ: 1,
+    equalizerLimiter: true,
+    equalizer: { 60: 0, 170: 0, 310: 0, 600: 0, 1000: 0, 3000: 0, 6000: 0, 12000: 0, 14000: 0, 16000: 0 }
+  };
+  state.playbackSettings = {
+    autoplay: false,
+    autoQueue: false,
+    smartShuffle: false,
+    defaultVolume: 50,
+    notificationsEnabled: true,
+    miniPlayer: false
+  };
+  state.developerSettings = {
+    enabled: false,
+    internetEnabled: true,
+    verbosePlayerLogs: false,
+    audioExtractor: 'lte',
+    performanceMode: 'balanced',
+    cacheSizeMB: 500,
+    startAtLogin: false
+  };
+  state.privacySettings = { saveListeningHistory: true };
+  state.account = { username: '', email: '' };
+  state.lyrics = { isOpen: false, cache: {}, activeKey: null };
+  state.isNewUser = true;
+
+  localStorage.clear();
+  try { sessionStorage.clear(); } catch (error) {}
+
+  if (elements.audioCacheToggle) elements.audioCacheToggle.checked = false;
+  const cacheSizeSelect = document.getElementById('audioCacheSizeSelect');
+  if (cacheSizeSelect) cacheSizeSelect.value = '500';
+
+  updatePlayingUI(false);
+  updateLibraryUI();
+  updateQueueUI();
+  updateTrackInfo();
+  updateSettingsUI();
+  syncMiniPlayerWindowWithPreference();
+  void loadAudioCacheLibrary();
+  elements.signupScreen?.classList.add('active');
+}
+
+async function performApplicationDataReset() {
+  const result = await ipcRenderer.invoke('delete-all-data');
+  if (!result || result.ok === false) {
+    throw new Error(result?.error || 'No se pudieron eliminar todos los datos');
+  }
+
+  resetRendererAfterDataDeletion();
+  return result;
+}
+
 // Modal de confirmación para borrar datos
 function showDeleteConfirmationModal() {
-    const modal = document.createElement('div');
-    modal.className = 'playlist-modal';
-    modal.innerHTML = `
-        <div class="modal-content">
-            <h3>¿Borrar todos los datos?</h3>
-            <p>Esta acción eliminará todas las playlists, canciones recientes, recomendaciones, configuraciones y datos de usuario. No se puede deshacer.</p>
-            <button id="confirmDeleteBtn" class="delete-btn">Confirmar</button>
-            <button class="close-modal">Cancelar</button>
-        </div>
-    `;
-    document.body.appendChild(modal);
+  document.querySelector('.application-reset-modal')?.remove();
+  const previousFocus = document.activeElement;
+  const modal = document.createElement('div');
+  modal.className = 'playlist-modal application-reset-modal';
+  modal.innerHTML = `
+    <section class="modal-content application-reset-dialog" role="dialog" aria-modal="true" aria-labelledby="applicationResetTitle" aria-describedby="applicationResetDescription">
+      <span class="application-reset-dialog-icon"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></span>
+      <div>
+        <span class="application-reset-dialog-eyebrow">Acción irreversible</span>
+        <h3 id="applicationResetTitle">¿Restablecer la aplicación?</h3>
+      </div>
+      <p id="applicationResetDescription">Se eliminarán tus playlists, biblioteca, favoritos, historial, configuraciones y todos los archivos de audio guardados en caché.</p>
+      <ul class="application-reset-dialog-list">
+        <li><i class="fas fa-check" aria-hidden="true"></i> Caché de audio y sus metadatos</li>
+        <li><i class="fas fa-check" aria-hidden="true"></i> Canciones, playlists, favoritos e historial</li>
+        <li><i class="fas fa-check" aria-hidden="true"></i> Preferencias y cuenta local</li>
+      </ul>
+      <p class="application-reset-dialog-status" aria-live="polite"></p>
+      <div class="application-reset-dialog-actions">
+        <button class="close-modal" type="button" data-reset-cancel>Cancelar</button>
+        <button class="delete-btn" type="button" data-reset-confirm><i class="fas fa-trash-alt" aria-hidden="true"></i><span>Eliminar todo</span></button>
+      </div>
+    </section>
+  `;
+  document.body.appendChild(modal);
 
-    const confirmBtn = document.getElementById('confirmDeleteBtn');
-    const closeBtn = modal.querySelector('.close-modal');
+  const confirmBtn = modal.querySelector('[data-reset-confirm]');
+  const closeBtn = modal.querySelector('[data-reset-cancel]');
+  const status = modal.querySelector('.application-reset-dialog-status');
+  const close = () => {
+    document.removeEventListener('keydown', onKeyDown);
+    modal.remove();
+    previousFocus?.focus?.();
+  };
+  const onKeyDown = (event) => {
+    if (event.key === 'Escape' && !confirmBtn.disabled) {
+      event.preventDefault();
+      close();
+    }
+  };
 
-    confirmBtn.addEventListener('click', async () => {
-        try {
-            await ipcRenderer.invoke('delete-all-data');
-            // Reiniciar estado local
-            state.library = [];
-            state.playlists = [];
-            state.queue = [];
-            state.currentTrack = null;
-            state.currentPlaylist = null;
-            state.currentPlaylistId = null;
-            state.searchResults = [];
-            state.settings = { showGif: false, gifUrl: null };
-            state.visualSettings = {
-              showVisualizer: true,
-              theme: 'dark',
-              accentColor: '#1db954',
-              interfaceMode: 'classic',
-              spectrogramOpacity: 0.4,
-              effectsIntensity: 70,
-              panelOpacity: 92,
-              animationQuality: 'balanced',
-              compactMode: false,
-              reduceMotion: false
-            };
-            state.audioSettings = {
-              normalizeVolume: false,
-              streamingQuality: 'medium',
-              lastStreamingProfile: null,
-              equalizerPreamp: 0,
-              equalizerQ: 1,
-              equalizerLimiter: true,
-              equalizer: { 60: 0, 170: 0, 310: 0, 600: 0, 1000: 0, 3000: 0, 6000: 0, 12000: 0, 14000: 0, 16000: 0 }
-            };
-            state.playbackSettings = { autoplay: false, autoQueue: false, smartShuffle: false, defaultVolume: 50, notificationsEnabled: true, miniPlayer: false };
-            state.developerSettings = { enabled: false, internetEnabled: true, verbosePlayerLogs: false, audioExtractor: 'auto', performanceMode: 'balanced', cacheSizeMB: 500, startAtLogin: false };
-            state.privacySettings = { saveListeningHistory: true };
-            state.account = { username: '', email: '' };
-            state.isNewUser = true;
-            localStorage.removeItem('appSettings');
-            localStorage.removeItem('user');
-            updateLibraryUI();
-            updateQueueUI();
-            updateTrackInfo();
-            updateSettingsUI();
-            notificationSystem.info('Todos los datos han sido eliminados');
-            elements.signupScreen.classList.add('active'); // Volver a la pantalla de registro
-        } catch (error) {
-            console.error('Error al borrar datos:', error);
-            notificationSystem.info('Error al borrar los datos');
-        }
-        modal.remove();
-    });
+  confirmBtn.addEventListener('click', async () => {
+    confirmBtn.disabled = true;
+    closeBtn.disabled = true;
+    confirmBtn.querySelector('span').textContent = 'Restableciendo…';
+    status.textContent = 'Eliminando datos y vaciando la caché de audio…';
 
-    closeBtn.addEventListener('click', () => modal.remove());
+    try {
+      await performApplicationDataReset();
+      notificationSystem.success('La aplicación se restableció y la caché fue eliminada');
+      close();
+    } catch (error) {
+      console.error('Error al restablecer la aplicación:', error);
+      status.textContent = error.message || 'No se pudieron eliminar todos los datos.';
+      confirmBtn.disabled = false;
+      closeBtn.disabled = false;
+      confirmBtn.querySelector('span').textContent = 'Eliminar todo';
+      notificationSystem.error('No se pudo restablecer la aplicación');
+    }
+  });
+
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal && !confirmBtn.disabled) close();
+  });
+  document.addEventListener('keydown', onKeyDown);
+  requestAnimationFrame(() => confirmBtn.focus());
 }
 
 // Funcionalidad de subida de archivos
@@ -9258,10 +10723,13 @@ async function loadLocalMusic() {
   try {
     const localMusic = await ipcRenderer.invoke('get-local-music');
     state.localMusic = localMusic || [];
-    displayLocalMusic(localMusic);
     loadMyMusicContent();
+    return state.localMusic;
   } catch (error) {
     console.error('Error al cargar música local:', error);
+    state.localMusic = [];
+    loadMyMusicContent();
+    return [];
   }
 }
 
@@ -9343,10 +10811,6 @@ function initSpectrogram() {
 }
 
 // Estado del bloom de resonancia del espectrograma.
-let spectrogramBursts = [];
-let spectrogramBassSmooth = 0;
-let spectrogramEnergySmooth = 0;
-let lastSpectrogramImpactTime = 0;
 
 function startSpectrogram() {
   if (!spectrogramCanvas || !spectrogramCtx) {
@@ -9396,50 +10860,8 @@ function startSpectrogram() {
       analyser.getByteFrequencyData(audioDataArray);
     }
 
-    spectrogramCtx.clearRect(0, 0, width, height);
-    spectrogramCtx.fillStyle = 'rgba(10, 12, 18, 0.25)';
-    spectrogramCtx.fillRect(0, 0, width, height);
-
-    const bufferLength = analyser ? analyser.frequencyBinCount : 0;
-    const barCount = 200;
-    const spacing = width / barCount;
-    const barWidth = spacing * 0.7;
-
-    const gradient = spectrogramCtx.createLinearGradient(0, height, 0, 0);
-    const timeHue = (time * 0.3) % 360;
-    gradient.addColorStop(0, `hsla(${timeHue}, 80%, 50%, 1)`);
-    gradient.addColorStop(0.5, `hsla(${timeHue + 40}, 90%, 60%, 1)`);
-    gradient.addColorStop(1, `hsla(${timeHue + 80}, 100%, 80%, 1)`);
-
-    spectrogramCtx.fillStyle = gradient;
-    spectrogramCtx.shadowBlur = 15;
-    spectrogramCtx.shadowColor = `hsla(${timeHue}, 80%, 60%, 0.6)`;
-    spectrogramCtx.beginPath();
-
-    const usefulBands = Math.floor(bufferLength * 0.8);
-    for (let i = 0; i < barCount / 2; i++) {
-      const indexRatio = i / (barCount / 2);
-      const dataIndex = Math.floor(Math.pow(indexRatio, 0.8) * usefulBands);
-      let value = audioDataArray ? audioDataArray[dataIndex] : 0;
-      value = Math.max(value, 3);
-      const barHeight = (Math.pow(value / 255, 1.2)) * (height * 0.6);
-      const xLeft = width / 2 - (i * spacing) - spacing;
-      const y = height / 2 - barHeight / 2;
-      const xRight = width / 2 + (i * spacing);
-
-      if (spectrogramCtx.roundRect) {
-        spectrogramCtx.roundRect(xLeft, y, barWidth, barHeight, barWidth / 2);
-        spectrogramCtx.roundRect(xRight, y, barWidth, barHeight, barWidth / 2);
-      } else {
-        spectrogramCtx.rect(xLeft, y, barWidth, barHeight);
-        spectrogramCtx.rect(xRight, y, barWidth, barHeight);
-      }
-    }
-    spectrogramCtx.fill();
-    spectrogramCtx.shadowBlur = 0;
-
-    drawResonanceBloom(width, height, audioDataArray, timeHue);
-
+    audioScenePainter.render(spectrogramCtx, width, height, audioDataArray, performance.now(),
+      state.visualSettings.spectrogramStyle || 'original', isMotionReduced());
     time += 1;
     spectrogramFrameId = requestAnimationFrame(animateLuxury);
   }
@@ -9447,313 +10869,8 @@ function startSpectrogram() {
   spectrogramFrameId = requestAnimationFrame(animateLuxury);
 }
 
-function clampVisualValue(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-function getBandAverage(data, start, end) {
-  if (!data || data.length === 0) return 0;
-
-  const first = Math.max(0, Math.min(data.length, start));
-  const last = Math.max(first, Math.min(data.length, end));
-  if (last <= first) return 0;
-
-  let total = 0;
-  for (let i = first; i < last; i++) {
-    total += data[i];
-  }
-
-  return total / (last - first);
-}
-
-function drawResonanceBloom(width, height, data, hue) {
-  if (!spectrogramCtx || !data) return;
-
-  const bass = getBandAverage(data, 0, 18) / 255;
-  const body = getBandAverage(data, 18, 72) / 255;
-  const air = getBandAverage(data, 96, 220) / 255;
-  const energy = clampVisualValue((bass * 0.62) + (body * 0.28) + (air * 0.1), 0, 1);
-  const previousBass = spectrogramBassSmooth;
-  const bassAttack = bass > spectrogramBassSmooth ? 0.24 : 0.07;
-  const energyAttack = energy > spectrogramEnergySmooth ? 0.16 : 0.06;
-  const now = performance.now();
-  const impact = Math.max(0, bass - previousBass);
-
-  spectrogramBassSmooth += (bass - spectrogramBassSmooth) * bassAttack;
-  spectrogramEnergySmooth += (energy - spectrogramEnergySmooth) * energyAttack;
-
-  if ((impact > 0.16 || bass > 0.84) && bass > 0.5 && now - lastSpectrogramImpactTime > 115 && spectrogramBursts.length < 10) {
-    lastSpectrogramImpactTime = now;
-    spectrogramBursts.push({
-      age: 0,
-      life: 34 + Math.floor(bass * 20),
-      strength: clampVisualValue((impact * 2.2) + (bass * 0.42), 0.35, 1),
-      hue: hue + (body * 70),
-      spin: Math.random() * Math.PI * 2,
-      twist: (Math.random() - 0.5) * 0.72
-    });
-  }
-
-  spectrogramCtx.save();
-  spectrogramCtx.globalCompositeOperation = 'screen';
-  drawEpicCenterFlare(width, height, hue, energy, impact);
-  drawCornerRadiance(width, height, hue, energy);
-  drawSpectrogramBursts(width, height);
-  drawImpactFlares(width, height, hue, energy, impact);
-  spectrogramCtx.restore();
-}
-
-function drawEpicCenterFlare(width, height, hue, energy, impact) {
-  if (!spectrogramCtx) return;
-
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const minDim = Math.min(width, height);
-  let coreRadius = minDim * (0.05 + energy * 0.14 + impact * 0.14);
-  let glowRadius = minDim * (0.22 + energy * 0.24 + impact * 0.1);
-
-  // Defensive: ensure radii are finite and non-negative to avoid Canvas IndexSizeError
-  if (!Number.isFinite(coreRadius)) coreRadius = 0;
-  if (!Number.isFinite(glowRadius)) glowRadius = 0;
-  coreRadius = Math.max(0, coreRadius);
-  glowRadius = Math.max(0, glowRadius);
-
-  const coreGlow = spectrogramCtx.createRadialGradient(centerX, centerY, 0, centerX, centerY, glowRadius);
-  coreGlow.addColorStop(0, `hsla(${hue + 12}, 100%, 84%, ${0.22 + impact * 0.16})`);
-  coreGlow.addColorStop(0.18, `hsla(${hue + 48}, 100%, 72%, ${0.16 + energy * 0.08})`);
-  coreGlow.addColorStop(0.48, `hsla(${hue + 72}, 96%, 66%, ${0.1 + energy * 0.04})`);
-  coreGlow.addColorStop(1, 'hsla(0,0%,100%,0)');
-
-  if (glowRadius > 0.0001) {
-    spectrogramCtx.fillStyle = coreGlow;
-    spectrogramCtx.fillRect(centerX - glowRadius, centerY - glowRadius, glowRadius * 2, glowRadius * 2);
-  }
-
-  const ringHue = hue + 30;
-  spectrogramCtx.strokeStyle = `hsla(${ringHue}, 100%, 82%, ${0.08 + impact * 0.1})`;
-  spectrogramCtx.lineWidth = 2.2 + impact * 3.4;
-  if (coreRadius * 1.12 > 0.0001) {
-    spectrogramCtx.beginPath();
-    spectrogramCtx.arc(centerX, centerY, coreRadius * 1.12, 0, Math.PI * 2);
-    spectrogramCtx.stroke();
-  }
-
-  const pulseCount = 10;
-  const baseAlpha = 0.08 + impact * 0.12;
-  for (let i = 0; i < pulseCount; i++) {
-    const angle = (Math.PI * 2 / pulseCount) * i + time * 0.02;
-    const length = coreRadius * (1.1 + energy * 0.8 + impact * 0.9);
-    const x = centerX + Math.cos(angle) * length;
-    const y = centerY + Math.sin(angle) * length;
-
-    spectrogramCtx.strokeStyle = `hsla(${hue + 22 + i * 12}, 100%, 88%, ${baseAlpha * (1 - i / pulseCount)})`;
-    spectrogramCtx.lineWidth = 0.9 + energy * 1.1;
-    spectrogramCtx.beginPath();
-    spectrogramCtx.moveTo(centerX + Math.cos(angle) * coreRadius * 0.6, centerY + Math.sin(angle) * coreRadius * 0.6);
-    spectrogramCtx.lineTo(x, y);
-    spectrogramCtx.stroke();
-
-    spectrogramCtx.fillStyle = `hsla(${hue + 28 + i * 10}, 100%, 82%, ${baseAlpha * 0.75})`;
-    if ((2 + impact * 2) > 0.0001) {
-      spectrogramCtx.beginPath();
-      spectrogramCtx.arc(x, y, 2 + impact * 2, 0, Math.PI * 2);
-      spectrogramCtx.fill();
-    }
-  }
-
-  if (impact > 0.1) {
-    const confettiCount = 14;
-    for (let i = 0; i < confettiCount; i++) {
-      const angle = (Math.PI * 2 / confettiCount) * i + (time * 0.03);
-      const distance = coreRadius * (1.2 + Math.sin(time * 0.017 + i) * 0.18 + impact * 0.28);
-      const px = centerX + Math.cos(angle) * distance;
-      const py = centerY + Math.sin(angle) * distance;
-      const hueOffset = hue + (i * 18);
-      const size = 1.5 + Math.sin(i + time * 0.05) * 1.8 + impact * 1.8;
-      if (size > 0.0001) {
-        spectrogramCtx.fillStyle = `hsla(${hueOffset}, 100%, 78%, ${0.18 + impact * 0.1})`;
-        spectrogramCtx.beginPath();
-        spectrogramCtx.arc(px, py, size, 0, Math.PI * 2);
-        spectrogramCtx.fill();
-      }
-    }
-  }
-}
-
-function drawCornerRadiance(width, height, hue, energy) {
-  if (!spectrogramCtx || energy < 0.12) return;
-
-  const minDim = Math.min(width, height);
-  // Hacer que el propio círculo de la esquina reaccione: mayor energía -> mayor tamaño y alpha
-  const baseRadiance = minDim * 0.12;
-  const radiance = baseRadiance * (1 + energy * 1.6);
-  const bottomOffset = height * 0.08;
-  const corners = [
-    { x: 0, y: 0, offset: 0 },
-    { x: width, y: 0, offset: 36 },
-    { x: 0, y: height - bottomOffset, offset: 72 },
-    { x: width, y: height - bottomOffset, offset: 108 }
-  ];
-
-  // Smoke/soft particle near corner - subtle animated noise using time
-  corners.forEach(({ x, y, offset }, cornerIndex) => {
-    const cornerHue = hue + offset;
-
-    // Glow gradient for the corner circle
-    const glow = spectrogramCtx.createRadialGradient(x, y, 0, x, y, radiance);
-    const alphaMain = Math.min(0.6, 0.18 + energy * 0.22);
-    glow.addColorStop(0, `hsla(${cornerHue}, 100%, 74%, ${alphaMain})`);
-    glow.addColorStop(0.28, `hsla(${cornerHue + 34}, 92%, 70%, ${Math.min(0.42, 0.09 + energy * 0.12)})`);
-    glow.addColorStop(1, 'hsla(0,0%,100%,0)');
-
-    spectrogramCtx.fillStyle = glow;
-    spectrogramCtx.fillRect(x - radiance, y - radiance, radiance * 2, radiance * 2);
-
-    // Subtle animated smoke: low-opacity radial with slight offset
-    const smokeStrength = Math.max(0, Math.min(0.32, energy * 0.6));
-    if (smokeStrength > 0.01) {
-      const smokeRadius = radiance * (1.25 + Math.sin(time * 0.012 + cornerIndex) * 0.08);
-      const sx = x + Math.cos(time * 0.007 + cornerIndex * 1.3) * (radiance * 0.06);
-      const sy = y + Math.sin(time * 0.009 + cornerIndex * 0.9) * (radiance * 0.04);
-      const smoke = spectrogramCtx.createRadialGradient(sx, sy, 0, sx, sy, smokeRadius);
-      smoke.addColorStop(0, `hsla(${cornerHue + 8}, 100%, 84%, ${smokeStrength * 0.65})`);
-      smoke.addColorStop(0.45, `hsla(${cornerHue + 28}, 92%, 76%, ${smokeStrength * 0.28})`);
-      smoke.addColorStop(1, 'hsla(0,0%,100%,0)');
-      spectrogramCtx.globalCompositeOperation = 'lighter';
-      spectrogramCtx.fillStyle = smoke;
-      spectrogramCtx.fillRect(sx - smokeRadius, sy - smokeRadius, smokeRadius * 2, smokeRadius * 2);
-      spectrogramCtx.globalCompositeOperation = 'source-over';
-    }
-
-    // Small confetti burst near corner when energy is high
-    if (energy > 0.64) {
-      const confettiCount = 6;
-      for (let c = 0; c < confettiCount; c++) {
-        const ang = Math.random() * Math.PI * 0.9 + (cornerIndex % 2 ? -0.2 : 0.2);
-        const dist = radiance * (0.6 + Math.random() * 0.6);
-        const cx = x + Math.cos(ang) * dist;
-        const cy = y + Math.sin(ang) * dist;
-        const confHue = cornerHue + (Math.random() * 60 - 30);
-        const w = 2 + Math.random() * 4;
-        const h = 1 + Math.random() * 3;
-        spectrogramCtx.fillStyle = `hsla(${confHue}, 100%, 78%, ${0.18 + Math.random() * 0.26})`;
-        spectrogramCtx.fillRect(cx - w / 2, cy - h / 2, w, h);
-      }
-    }
-  });
-}
-
-function drawImpactFlares(width, height, hue, energy, impact) {
-  if (!spectrogramCtx || impact <= 0.08) return;
-
-  const flareStrength = Math.min(0.55, impact * 0.28 + energy * 0.16);
-  const flareRadius = Math.max(width, height) * 0.14;
-  const verticalOffset = height * 0.08;
-  const positions = [
-    { x: width * 0.16, y: height * 0.16 },
-    { x: width * 0.84, y: height * 0.16 },
-    { x: width * 0.16, y: height * 0.84 - verticalOffset },
-    { x: width * 0.84, y: height * 0.84 - verticalOffset }
-  ];
-
-  // Draw larger flares but remove the small luminous dots near corners
-  positions.forEach((pos, index) => {
-    const flareHue = hue + index * 20;
-    const flare = spectrogramCtx.createRadialGradient(pos.x, pos.y, 0, pos.x, pos.y, flareRadius);
-    flare.addColorStop(0, `hsla(${flareHue}, 100%, 86%, ${flareStrength * 0.32})`);
-    flare.addColorStop(0.18, `hsla(${flareHue + 22}, 98%, 77%, ${flareStrength * 0.18})`);
-    flare.addColorStop(0.46, `hsla(${flareHue + 48}, 90%, 70%, ${flareStrength * 0.1})`);
-    flare.addColorStop(1, 'hsla(0,0%,100%,0)');
-
-    spectrogramCtx.fillStyle = flare;
-    spectrogramCtx.fillRect(pos.x - flareRadius, pos.y - flareRadius, flareRadius * 2, flareRadius * 2);
-  });
-
-  const streakHue = hue + 56;
-  const streak = spectrogramCtx.createLinearGradient(0, 0, width, height);
-  streak.addColorStop(0, `hsla(${streakHue}, 100%, 82%, ${flareStrength * 0.09})`);
-  streak.addColorStop(0.32, `hsla(${streakHue + 20}, 100%, 78%, ${flareStrength * 0.05})`);
-  streak.addColorStop(1, 'hsla(0,0%,100%,0)');
-
-  spectrogramCtx.strokeStyle = streak;
-  spectrogramCtx.lineWidth = 0.9 + flareStrength * 2.2;
-  spectrogramCtx.beginPath();
-  spectrogramCtx.moveTo(width * 0.12, height * 0.48);
-  spectrogramCtx.quadraticCurveTo(width * 0.5, height * 0.5 + impact * 0.08 * height, width * 0.88, height * 0.48);
-  spectrogramCtx.stroke();
-}
-
-function drawResonanceRibbons(width, height, data, hue, energy) {
-  // Ribbons are intentionally disabled to avoid floating line artifacts.
-}
-
-function drawSpectrogramBursts(width, height) {
-  const centerX = width / 2;
-  const centerY = height / 2;
-  const minDim = Math.min(width, height);
-
-  for (let i = spectrogramBursts.length - 1; i >= 0; i--) {
-    const burst = spectrogramBursts[i];
-    burst.age += 1;
-
-    const progress = burst.age / burst.life;
-    if (progress >= 1) {
-      spectrogramBursts.splice(i, 1);
-      continue;
-    }
-
-    const fade = Math.pow(1 - progress, 1.85) * burst.strength;
-    const radius = minDim * (0.07 + progress * (0.48 + burst.strength * 0.2));
-    const ringHue = burst.hue + progress * 34;
-    const bandHeight = height * (0.045 + burst.strength * 0.065) * (1 - progress * 0.55);
-    const flash = spectrogramCtx.createLinearGradient(0, centerY, width, centerY);
-
-    flash.addColorStop(0, `hsla(${ringHue}, 100%, 65%, 0)`);
-    flash.addColorStop(0.43, `hsla(${ringHue + 35}, 100%, 70%, ${fade * 0.08})`);
-    flash.addColorStop(0.5, `hsla(${ringHue + 95}, 100%, 78%, ${fade * 0.13})`);
-    flash.addColorStop(0.57, `hsla(${ringHue + 35}, 100%, 70%, ${fade * 0.08})`);
-    flash.addColorStop(1, `hsla(${ringHue}, 100%, 65%, 0)`);
-
-    spectrogramCtx.fillStyle = flash;
-    spectrogramCtx.fillRect(0, centerY - bandHeight, width, bandHeight * 2);
-
-    spectrogramCtx.beginPath();
-    spectrogramCtx.ellipse(centerX, centerY, radius * 1.65, radius * 0.42, burst.spin + progress * burst.twist, 0, Math.PI * 2);
-    spectrogramCtx.shadowBlur = 24 * fade;
-    spectrogramCtx.shadowColor = `hsla(${ringHue + 32}, 100%, 70%, ${fade * 0.65})`;
-    spectrogramCtx.strokeStyle = `hsla(${ringHue + 18}, 100%, 72%, ${fade * 0.62})`;
-    spectrogramCtx.lineWidth = Math.max(1, (1 - progress) * 5.5 * burst.strength);
-    spectrogramCtx.stroke();
-
-    spectrogramCtx.beginPath();
-    spectrogramCtx.ellipse(centerX, centerY, radius * 1.08, radius * 0.72, -burst.spin * 0.4 - progress * burst.twist, 0, Math.PI * 2);
-    spectrogramCtx.strokeStyle = `hsla(${ringHue + 118}, 100%, 74%, ${fade * 0.28})`;
-    spectrogramCtx.lineWidth = Math.max(0.7, (1 - progress) * 2.5 * burst.strength);
-    spectrogramCtx.stroke();
-
-    spectrogramCtx.beginPath();
-    for (let spoke = 0; spoke < 14; spoke++) {
-      const angle = (spoke / 14) * Math.PI * 2 + burst.spin + progress * 0.9;
-      const yScale = 0.46 + Math.sin(spoke + burst.spin) * 0.08;
-      const inner = radius * 0.24;
-      const outer = radius * (0.76 + Math.sin((progress * 8) + spoke) * 0.07);
-
-      spectrogramCtx.moveTo(centerX + Math.cos(angle) * inner, centerY + Math.sin(angle) * inner * yScale);
-      spectrogramCtx.lineTo(centerX + Math.cos(angle) * outer, centerY + Math.sin(angle) * outer * yScale);
-    }
-
-    spectrogramCtx.shadowBlur = 10 * fade;
-    spectrogramCtx.strokeStyle = `hsla(${ringHue + 62}, 100%, 76%, ${fade * 0.18})`;
-    spectrogramCtx.lineWidth = 1;
-    spectrogramCtx.stroke();
-  }
-}
-
-// Funciones antiguas vacías para evitar errores
-function drawWaves(audioIntensity) {}
-function drawAdditionalWaves(audioIntensity) {}
-
 function stopSpectrogram() {
+  audioScenePainter.reset();
   if (spectrogramFrameId) {
     cancelAnimationFrame(spectrogramFrameId);
     spectrogramFrameId = null;
@@ -9762,10 +10879,6 @@ function stopSpectrogram() {
     window.removeEventListener('resize', spectrogramResizeHandler);
     spectrogramResizeHandler = null;
   }
-  spectrogramBursts = [];
-  spectrogramBassSmooth = 0;
-  spectrogramEnergySmooth = 0;
-  lastSpectrogramImpactTime = 0;
   if (elements.spectrogram) {
     elements.spectrogram.style.display = 'none';
   }
@@ -10096,6 +11209,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     await loadLibrary();
     await loadVisualSettings();
+    await refreshHomePage({ libraryLoaded: true });
     
     // Aplicar color de acento inicial
     updateProgressBarsColor(state.visualSettings.accentColor);
@@ -10110,14 +11224,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     initializeUploadFunctionality();
     initializeNavigationLinks();
     
-    // Event listeners para Mi Música
-    document.getElementById('myMusicShuffleBtn')?.addEventListener('click', () => {
-        shuffleMyMusic();
-    });
-    
-    document.getElementById('uploadMusicBtn')?.addEventListener('click', () => {
-        openUploadPage();
-    });
+    initializeMyMusicControls();
     
     // Event listener para botón de prueba de notificaciones
     const testNotificationBtn = document.getElementById('testNotificationBtn');
@@ -10347,6 +11454,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         notificationSystem.success('Contadores actualizados');
     };
     
+    // Recuperar una actualización ya descargada si el renderer terminó de cargar después.
+    void restorePendingAppUpdate();
+
     // Hacer funciones globales para los botones de las tarjetas
     window.showNormalLibrary = showNormalLibrary;
     window.playSong = playSong;
@@ -10375,6 +11485,20 @@ if (elements.lyricsButton) {
 }
 if (elements.miniPlayerButton) {
   elements.miniPlayerButton.addEventListener('click', handleMiniPlayerButtonClick);
+  const overlayButton = document.createElement('button');
+  overlayButton.type = 'button';
+  overlayButton.id = 'gameOverlayButton';
+  overlayButton.className = elements.miniPlayerButton.className;
+  overlayButton.title = 'Overlay para juegos · Ctrl + L';
+  overlayButton.setAttribute('aria-label', 'Abrir overlay para juegos (Ctrl + L)');
+  overlayButton.innerHTML = '<i class="fas fa-gamepad" aria-hidden="true"></i>';
+  overlayButton.addEventListener('click', async () => {
+    try {
+      const status = await ipcRenderer.invoke('game-overlay:toggle');
+      if (!status.registered) notificationSystem.warning('Ctrl + L está ocupado por otra aplicación. Puedes abrir el overlay desde este botón.');
+    } catch (error) { notificationSystem.error(error.message || 'No se pudo abrir el overlay'); }
+  });
+  elements.miniPlayerButton.after(overlayButton);
 }
 if (elements.nowPlayingQueueButton) {
   elements.nowPlayingQueueButton.addEventListener('click', toggleNowPlayingQueue);
@@ -10428,6 +11552,36 @@ ipcRenderer.on('player:toggle', () => {
   togglePlayPause();
 });
 
+function syncNowPlayingSaveActions() {
+  const favorite = document.getElementById('nowFavoriteButton');
+  const playlist = document.getElementById('nowPlaylistButton');
+  const track = state.currentTrack;
+  if (playlist) playlist.disabled = !track;
+  if (!favorite) return;
+  favorite.disabled = !track || favorite.dataset.busy === 'true';
+  const active = !!track && isFavoriteTrack(track);
+  favorite.classList.toggle('is-saved', active);
+  favorite.setAttribute('aria-pressed', String(active));
+  favorite.title = active ? 'Quitar de favoritos' : 'Añadir a favoritos';
+  favorite.setAttribute('aria-label', favorite.title);
+  favorite.innerHTML = `<i class="${active ? 'fas' : 'far'} fa-heart" aria-hidden="true"></i>`;
+}
+document.getElementById('nowFavoriteButton')?.addEventListener('click', async event => {
+  const button = event.currentTarget;
+  const track = state.currentTrack ? { ...state.currentTrack } : null;
+  if (!track || button.dataset.busy === 'true') return;
+  button.dataset.busy = 'true'; button.disabled = true;
+  try { await toggleFavorite(track); }
+  finally { button.dataset.busy = 'false'; syncNowPlayingSaveActions(); }
+});
+document.getElementById('nowPlaylistButton')?.addEventListener('click', async () => {
+  const track = state.currentTrack ? { ...state.currentTrack } : null;
+  if (!track) return;
+  try { state.playlists = await ipcRenderer.invoke('get-playlists'); await showPlaylistSelector(track); }
+  catch (error) { notificationSystem.error(error.message || 'No se pudieron cargar tus playlists'); }
+});
+syncNowPlayingSaveActions();
+
 ipcRenderer.on('player:previous', () => {
   playPrevious();
 });
@@ -10444,6 +11598,27 @@ ipcRenderer.on('player:seek-to', (event, value) => {
   seekPlayerToTime(value);
 });
 
+ipcRenderer.on('player:skip-by', (_event, value) => {
+  const delta = Number(value);
+  if (Number.isFinite(delta)) seekPlayerToTime(getAudioCurrentTime() + Math.max(-10, Math.min(10, delta)));
+});
+
+let gameOverlayTelemetryTimer = null;
+ipcRenderer.on('game-overlay:visibility', (_event, visible) => {
+  if (gameOverlayTelemetryTimer) clearInterval(gameOverlayTelemetryTimer);
+  gameOverlayTelemetryTimer = null;
+  if (visible) {
+    sendPlayerStateToMain();
+    gameOverlayTelemetryTimer = setInterval(sendPlayerStateToMain, 500);
+  }
+});
+ipcRenderer.on('game-overlay:play-track', (_event, track) => {
+  if (track?.url) void playSong(track);
+});
+window.addEventListener('beforeunload', () => {
+  if (gameOverlayTelemetryTimer) clearInterval(gameOverlayTelemetryTimer);
+});
+
 ipcRenderer.on('mini-player:closed', () => {
   state.playbackSettings.miniPlayer = false;
   localStorage.setItem('miniPlayer', 'false');
@@ -10455,6 +11630,10 @@ ipcRenderer.on('mini-player:closed', () => {
 
 ipcRenderer.on('birthday-video:play', () => {
   showBirthdayVideo();
+});
+
+ipcRenderer.on('app-update:ready', (event, update) => {
+  showAppUpdateModal(update);
 });
 
 function initializeSettings() {
@@ -10615,7 +11794,7 @@ function initializeSettings() {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'rokmusic_data.json';
+        a.download = 'lunera_data.json';
         a.click();
         URL.revokeObjectURL(url);
         notificationSystem.info('Datos exportados correctamente');
@@ -11006,6 +12185,9 @@ function initializeSettingsPage() {
   // Controles de configuración
   initializeSettingsControls();
   initializeSettingsButtons();
+  ensureLseDeveloperPanel();
+  ensureLteDeveloperPanel();
+  bindLseAudibleStartReporter();
   
   // Cargar configuración inicial
   loadSettingsValues();
@@ -11211,9 +12393,25 @@ function initializeSettingsControls() {
   if (elements.clearAudioCacheBtn && !elements.clearAudioCacheBtn.dataset.bound) {
     elements.clearAudioCacheBtn.dataset.bound = 'true';
     elements.clearAudioCacheBtn.addEventListener('click', async () => {
-      await ipcRenderer.invoke('clear-audio-cache');
-      refreshDeveloperModeUI();
-      notificationSystem.success('Caché de audio vaciada');
+      const button = elements.clearAudioCacheBtn;
+      const originalLabel = button.querySelector('span')?.textContent || 'Vaciar caché';
+      button.disabled = true;
+      if (button.querySelector('span')) button.querySelector('span').textContent = 'Vaciando caché…';
+
+      try {
+        const result = await ipcRenderer.invoke('clear-audio-cache');
+        if (!result || result.ok === false) {
+          throw new Error(result?.error || 'No se pudo vaciar la caché de audio');
+        }
+        refreshDeveloperModeUI();
+        notificationSystem.success('Caché de audio vaciada');
+      } catch (error) {
+        console.error('No se pudo vaciar la caché de audio:', error);
+        notificationSystem.error('No se pudo vaciar la caché de audio');
+      } finally {
+        button.disabled = false;
+        if (button.querySelector('span')) button.querySelector('span').textContent = originalLabel;
+      }
     });
   }
 
@@ -11253,7 +12451,7 @@ function initializeSettingsControls() {
   if (devTestNotificationBtn && !devTestNotificationBtn.dataset.bound) {
     devTestNotificationBtn.dataset.bound = 'true';
     devTestNotificationBtn.addEventListener('click', () => {
-      notificationSystem.success('Notificación de prueba');
+      notificationSystem.success('Notificación de prueba', { force: true });
     });
   }
 
@@ -11271,7 +12469,7 @@ function initializeSettingsControls() {
         playbackSettings: state.playbackSettings,
         developerSettings: state.developerSettings,
         streamingQuality: state.audioSettings.streamingQuality || 'medium',
-        audioExtractor: state.developerSettings.audioExtractor || 'auto',
+        audioExtractor: state.developerSettings.audioExtractor || 'lte',
         lastStreamingProfile: state.audioSettings.lastStreamingProfile || null,
         audioCacheEnabled: localStorage.getItem('audioCache') === 'true'
       };
@@ -11290,13 +12488,23 @@ function initializeSettingsControls() {
 
   if (elements.clearRecentTracksBtn && !elements.clearRecentTracksBtn.dataset.bound) {
     elements.clearRecentTracksBtn.dataset.bound = 'true';
-    elements.clearRecentTracksBtn.addEventListener('click', () => {
-      state.recentlyPlayed = [];
-      localStorage.setItem('recentlyPlayed', '[]');
-      if (typeof loadRecommendations === 'function') {
-        loadRecommendations();
+    elements.clearRecentTracksBtn.addEventListener('click', async () => {
+      elements.clearRecentTracksBtn.disabled = true;
+      try {
+        await ipcRenderer.invoke('clear-listening-history');
+        state.recentlyPlayed = [];
+        localStorage.setItem('recentlyPlayed', '[]');
+        displayRecentlyPlayed(state.recentlyPlayed);
+        if (typeof loadRecommendations === 'function') {
+          await loadRecommendations();
+        }
+        notificationSystem.success('Canciones recientes vaciadas');
+      } catch (error) {
+        console.error('Error limpiando canciones recientes:', error);
+        notificationSystem.error('No se pudieron vaciar las canciones recientes');
+      } finally {
+        elements.clearRecentTracksBtn.disabled = false;
       }
-      notificationSystem.success('Canciones recientes vaciadas');
     });
   }
 
@@ -11374,12 +12582,16 @@ function initializeSettingsControls() {
         refreshDeveloperModeUI();
         notificationSystem.info(`Calidad de streaming: ${getStreamingQualityLabel(value)}`);
       } else if (settingName === 'audioExtractor') {
+        const previousExtractor = normalizeAudioExtractor(state.developerSettings.audioExtractor || 'lte');
         const extractor = normalizeAudioExtractor(value);
         state.developerSettings.audioExtractor = extractor;
         localStorage.setItem('audioExtractor', extractor);
+        lastPreloadedTrackKey = null;
+        void cancelEnginePreloads(previousExtractor);
         ipcRenderer.invoke('set-audio-extractor', extractor)
           .then((savedExtractor) => {
             state.developerSettings.audioExtractor = normalizeAudioExtractor(savedExtractor);
+            if (state.isPlaying) preloadUpcomingTrack();
             refreshDeveloperModeUI();
             saveSettings();
           })
@@ -11389,7 +12601,7 @@ function initializeSettingsControls() {
           });
         notificationSystem.info(`Motor de extracción: ${getAudioExtractorLabel(extractor)}`);
       } else if (settingName === 'language') {
-        notificationSystem.info(`Idioma seleccionado: ${value.toUpperCase()}`);
+        window.luneraI18n?.setLanguage(value);
       }
       saveSettings();
     });
@@ -11814,11 +13026,7 @@ function initializeSettingsButtons() {
   if (deleteAllBtn && !deleteAllBtn.dataset.bound) {
     deleteAllBtn.dataset.bound = 'true';
     deleteAllBtn.addEventListener('click', () => {
-      if (confirm('¿ESTÁS SEGURO? Esta acción eliminará TODOS tus datos: playlists, canciones, configuraciones, etc. Esta acción NO se puede deshacer.')) {
-        if (confirm('Última confirmación: ¿Realmente quieres borrar TODOS los datos?')) {
-          deleteAllData();
-        }
-      }
+      showDeleteConfirmationModal();
     });
   }
   
@@ -12329,8 +13537,8 @@ function readStoredNumber(key, fallback, min = Number.NEGATIVE_INFINITY, max = N
 
 function applyPremiumUiPreferences() {
   const root = document.documentElement;
-  const effectsIntensity = readStoredNumber('effectsIntensity', state.visualSettings.effectsIntensity ?? 70, 0, 100);
-  const panelOpacity = readStoredNumber('panelOpacity', state.visualSettings.panelOpacity ?? 92, 70, 100);
+  const effectsIntensity = Math.max(0, Math.min(100, Number(state.visualSettings.effectsIntensity ?? 70)));
+  const panelOpacity = Math.max(70, Math.min(100, Number(state.visualSettings.panelOpacity ?? 92)));
   const animationQuality = state.visualSettings.animationQuality || localStorage.getItem('animationQuality') || 'balanced';
   const compactMode = !!state.visualSettings.compactMode;
   const reduceMotion = !!state.visualSettings.reduceMotion;
@@ -12339,6 +13547,10 @@ function applyPremiumUiPreferences() {
 
   root.style.setProperty('--settings-effects-strength', String(effectsIntensity / 100));
   root.style.setProperty('--settings-panel-alpha', String(panelOpacity / 100));
+  // The settings panel defines defaults locally, so update that scope as well.
+  const settingsPanel = document.getElementById('settings');
+  settingsPanel?.style.setProperty('--settings-effects-strength', String(effectsIntensity / 100));
+  settingsPanel?.style.setProperty('--settings-panel-alpha', String(panelOpacity / 100));
   root.style.setProperty('--settings-motion-factor', reduceMotion ? '0' : animationQuality === 'high' ? '1.25' : animationQuality === 'reduced' ? '0.45' : '1');
 
   document.body.dataset.settingsAnimation = reduceMotion ? 'reduced' : animationQuality;
@@ -12398,6 +13610,7 @@ function refreshPremiumSettingsUI() {
   document.querySelectorAll('.modern-slider').forEach(updateSliderProgress);
   initializeModernRangeSliderInteractions();
   applyPremiumUiPreferences();
+  window.luneraI18n?.setLanguage(localStorage.getItem('language') || 'es');
 }
 
 function loadPremiumSettingsValues() {
@@ -12721,7 +13934,7 @@ function exportSettings() {
   
   const link = document.createElement('a');
   link.href = URL.createObjectURL(dataBlob);
-  link.download = 'rokmusic-settings.json';
+  link.download = 'lunera-settings.json';
   link.click();
   
   notificationSystem.success('Configuraciones exportadas correctamente');
@@ -12757,23 +13970,14 @@ function exportAllData() {
   
   const link = document.createElement('a');
   link.href = URL.createObjectURL(dataBlob);
-  link.download = 'rokmusic-data.json';
+  link.download = 'lunera-data.json';
   link.click();
   
   notificationSystem.success('Datos exportados correctamente');
 }
 
-function deleteAllData() {
-  // Limpiar estado
-  state.library = [];
-  state.playlists = [];
-  state.favorites = [];
-  
-  // Limpiar localStorage
-  localStorage.clear();
-  
-  // Recargar página
-  location.reload();
+async function deleteAllData() {
+  return performApplicationDataReset();
 }
 
 function showKeyboardShortcutsModal() {
@@ -12790,6 +13994,7 @@ function showKeyboardShortcutsModal() {
     ['R', 'Repetición'],
     ['Q', 'Mostrar u ocultar cola'],
     ['L', 'Letra de la canción'],
+    ['Ctrl + L', 'Abrir o cerrar overlay para juegos (global)'],
     ['? / F1', 'Ver atajos']
   ];
 

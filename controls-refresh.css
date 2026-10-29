@@ -1,0 +1,34 @@
+/* Visible native controls: the hit area stays generous without an oversized rail. */
+body .settings-2026 .slider-container::before,
+body .settings-2026 .slider-container::after { content: none; }
+body input.modern-slider[type=range] {
+  appearance: none; -webkit-appearance: none; opacity: 1; width: 100%;
+  height: 32px; padding: 0; margin: 4px 0; background: transparent;
+  border: 0; box-shadow: none; cursor: ew-resize; touch-action: none;
+  writing-mode: horizontal-tb; direction: ltr; transform: none;
+  --range-accent: var(--primary-color, #57dfa5);
+}
+body input.modern-slider[type=range]::-webkit-slider-runnable-track {
+  height: 6px; border: 0; border-radius: 99px;
+  background: linear-gradient(to right, var(--range-accent) var(--slider-progress, 0%), #ffffff18 var(--slider-progress, 0%));
+}
+body input.modern-slider[type=range]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 18px; height: 18px;
+  margin-top: -6px; border: 3px solid #e4fff0; border-radius: 50%;
+  background: var(--range-accent); box-shadow: 0 2px 8px #0007;
+  transform: none; transition: box-shadow 180ms ease;
+}
+body input.modern-slider[type=range]:hover::-webkit-slider-thumb,
+body input.modern-slider[type=range]:active::-webkit-slider-thumb {
+  transform: none; box-shadow: 0 0 0 6px color-mix(in srgb, var(--range-accent) 14%, transparent);
+}
+/* Keep the rail and thumb on the same horizontal axis while interacting. */
+body .setting-card:has(input.modern-slider[type=range]),
+body .setting-card:has(input.modern-slider[type=range]):hover {
+  transform: none;
+}
+body input.modern-slider[type=range]:focus-visible { outline: 2px solid var(--range-accent); outline-offset: 3px; border-radius: 8px; }
+body input.modern-slider[type=range]:disabled { opacity: .4; cursor: default; }
+body .settings-2026 .slider-labels { align-items: center; font-weight: 500; font-size: 12px; }
+body .settings-2026 .slider-labels strong { color: #d4f5e4; font-variant-numeric: tabular-nums; background: #ffffff08; border: 1px solid #ffffff0d; border-radius: 7px; padding: 3px 9px; min-width: 48px; text-align: center; }
+@media (prefers-reduced-motion: reduce) { body input.modern-slider[type=range]::-webkit-slider-thumb { transition: none; } }

@@ -7,27 +7,28 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; style-src-elem 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; img-src 'self' data: https://*; media-src 'self' data: blob: http://127.0.0.1:* http://localhost:*; connect-src 'self' https://* http://127.0.0.1:* http://localhost:*; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com;">
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="notification-styles.css">
+    <link rel="stylesheet" href="halloween.css">
+    <link rel="stylesheet" href="music-refresh.css">
+    <link rel="stylesheet" href="local-artists.css">
+    <link rel="stylesheet" href="controls-refresh.css">
+    <link rel="stylesheet" href="brand.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
     <!-- Pantalla de carga -->
-    <div id="loadingScreen" class="loading-screen">
-        <canvas id="loadingCanvas"></canvas>
-        <div class="loading-overlay"></div>
-        <div class="loading-content">
-            <div class="startup-splash" aria-hidden="true">
-                <div class="startup-orbit">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-                <div class="startup-logo-shell">
-                    <img src="assets/logo2.png" alt="">
-                </div>
-                <h1>Lunera</h1>
-                <div class="startup-progress"><span></span></div>
+    <div id="loadingScreen" class="loading-screen lunar-loading" role="status" aria-label="Iniciando Lunera">
+        <div class="lunar-halo" aria-hidden="true"></div>
+        <div class="lunar-intro">
+            <div class="lunar-mark" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                    <path class="lunar-mark-ghost" d="M19 3A10 10 0 1 0 21 18 10 10 0 0 1 19 3Z"/>
+                    <path class="lunar-mark-stroke" pathLength="100" d="M19 3A10 10 0 1 0 21 18 10 10 0 0 1 19 3Z"/>
+                </svg>
+                <span class="lunar-glint"></span>
             </div>
+            <div class="lunar-wordmask"><h1 class="lunar-word">Lunera<span class="lunar-dot">.</span></h1></div>
         </div>
+        <p class="lunar-caption" aria-hidden="true">Tu música. Tu momento.</p>
     </div>
 
     <!-- Menú de creación de cuenta e inicio de sesión para usuarios -->
@@ -160,6 +161,18 @@
             <p id="interfaceSwitchMessage">Preparando Lunera</p>
         </div>
     </div>
+
+    <div id="halloweenDecorations" class="halloween-decorations" inert>
+        <div class="halloween-moon"><span></span></div>
+        <div class="halloween-stars"><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="halloween-bat halloween-bat-one"><span></span></div>
+        <div class="halloween-bat halloween-bat-two"><span></span></div>
+        <div class="halloween-bat halloween-bat-three"><span></span></div>
+        <div class="halloween-web halloween-web-left"></div>
+        <div class="halloween-web halloween-web-right"></div>
+        <div class="halloween-pumpkin halloween-pumpkin-left"><span class="pumpkin-stem"></span><span class="pumpkin-eyes"></span><span class="pumpkin-smile"></span></div>
+        <div class="halloween-pumpkin halloween-pumpkin-right"><span class="pumpkin-stem"></span><span class="pumpkin-eyes"></span><span class="pumpkin-smile"></span></div>
+    </div>
     
     <div class="app-container">
         <canvas id="visualizer" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none;"></canvas>
@@ -182,18 +195,22 @@
         </div>
 
         <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="sidebar-brand">
-                <div class="brand-icon">
-                    <img src="assets/logo2.png" alt="Lunera" />
+        <div class="sidebar sidebar-luxe">
+            <div class="sidebar-brand lunar-brand">
+                <div class="brand-icon" aria-hidden="true">
+                    <img src="assets/branding/lunera-moon.svg" alt="" />
                 </div>
                 <div class="brand-meta">
-                    <div class="brand-title">Lunera</div>
-                    <div class="brand-tag">Beta 1.2.0</div>
+                    <div class="brand-title">Lunera<span class="brand-wordmark-dot">.</span></div>
+                    <div class="brand-tag" aria-label="Versión 2.0.0"><span>2.0.0</span></div>
                 </div>
             </div>
             
-            <nav>
+            <nav class="sidebar-navigation" aria-label="Navegación principal">
+                <div class="sidebar-nav-heading" aria-hidden="true">
+                    <span>Explorar</span>
+                    <i class="fas fa-compass"></i>
+                </div>
                 <ul class="nav-menu">
                     <li class="nav-item">
                         <a href="#" class="nav-link active" data-page="home">
@@ -257,12 +274,25 @@
                 </ul>
             </nav>
 
-            <div class="dedication-section">
-                <a href="#" class="dedication-link" id="dedicationLink">
-                    Hecho con ❤️ por Mateo Luciano Luppoli
-                </a>
+            <div class="dedication-section" aria-label="Dedicatoria de Lunera">
+                <div class="dedication-ambient" aria-hidden="true"><span></span><span></span><span></span></div>
+                <button class="dedication-link" id="dedicationLink" type="button" aria-describedby="dedicationCelebrationStatus">
+                    <span class="dedication-heart-scene" aria-hidden="true">
+                        <span class="dedication-heart-orbit orbit-one"></span>
+                        <span class="dedication-heart-orbit orbit-two"></span>
+                        <span class="dedication-heart-core">♥</span>
+                    </span>
+                    <span class="dedication-copy">
+                        <span class="dedication-kicker">Hecho con</span>
+                        <span class="dedication-love-line"><span class="dedication-inline-heart" aria-hidden="true">♥</span> por</span>
+                        <strong class="dedication-name">Mateo Luciano Luppoli</strong>
+                    </span>
+                    <span class="dedication-spark" aria-hidden="true"><i></i><i></i><i></i></span>
+                </button>
+                <span id="dedicationCelebrationStatus" class="sr-only" aria-live="polite"></span>
                 <button class="dedication-credits-btn" id="dedicationCreditsBtn" type="button">
-                    Creditos
+                    <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+                    <span>Créditos</span>
                 </button>
             </div>
         </div>
@@ -270,32 +300,26 @@
         <!-- Contenido principal -->
         <main class="main-content">
             <div id="home" class="page active">
-                <div class="home-shell">
-                    <section class="home-hero">
-                        <div class="home-hero-copy">
-                            <span class="home-kicker">Lunera Home</span>
-                            <h1>Tu música, lista para continuar.</h1>
-                            <p>Un inicio más limpio para volver a lo que estabas escuchando, descubrir pistas nuevas y moverte rápido por tu biblioteca.</p>
-                            <div class="home-actions">
-                                <button class="home-primary-action" id="heroSearchBtn" type="button">
-                                    <i class="fas fa-search"></i>
-                                    <span>Buscar música</span>
-                                </button>
-                                <button class="home-secondary-action" id="heroMyMusicBtn" type="button">
-                                    <i class="fas fa-compact-disc"></i>
-                                    <span>Mi música</span>
-                                </button>
-                            </div>
+                <div class="home-studio">
+                    <section class="home-stage" aria-labelledby="homeTitle">
+                        <div class="home-stage-copy">
+                            <span class="home-kicker"><i class="fas fa-wave-square" aria-hidden="true"></i> Tu espacio de escucha</span>
+                            <h1 id="homeTitle">Ponle ritmo a<br><em>tu momento.</em></h1>
+                            <p>Retoma lo que estabas escuchando, encuentra una nueva canción o deja que Lunera elija por ti.</p>
                         </div>
-                        <div class="home-hero-panel">
-                            <div class="home-hero-panel-top">
-                                <span>Resumen</span>
-                                <i class="fas fa-wave-square"></i>
+
+                        <aside class="home-session-card" aria-label="Resumen de tu biblioteca">
+                            <div class="home-session-heading">
+                                <div>
+                                    <span>Tu colección</span>
+                                    <strong>Lista para sonar</strong>
+                                </div>
+                                <span class="home-session-live"><i class="fas fa-circle" aria-hidden="true"></i> En vivo</span>
                             </div>
                             <div class="home-metrics">
                                 <div class="home-metric">
                                     <strong id="totalSongs">0</strong>
-                                    <span>Canciones</span>
+                                    <span>En biblioteca</span>
                                 </div>
                                 <div class="home-metric">
                                     <strong id="totalPlaylists">0</strong>
@@ -306,18 +330,20 @@
                                     <span>Recientes</span>
                                 </div>
                             </div>
-                            <div class="home-signal" id="homeVisualizer">
-                                <span></span><span></span><span></span><span></span><span></span><span></span>
+                            <div class="home-signal-wrap">
+                                <div class="home-signal" id="homeVisualizer" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span><span></span>
+                                </div>
                             </div>
-                        </div>
+                        </aside>
                     </section>
 
-                    <section class="home-grid">
-                        <div class="home-panel home-focus-panel">
+                    <section class="home-library-layout">
+                        <div class="home-panel home-listening-panel">
                             <div class="home-panel-header">
                                 <div>
-                                    <span class="home-section-kicker">Continuar</span>
-                                    <h2>Reproducido recientemente</h2>
+                                    <span class="home-section-kicker">Para continuar</span>
+                                    <h2>Vuelve a lo que te gustó</h2>
                                 </div>
                                 <span class="recent-count" id="recentCount">0 canciones</span>
                             </div>
@@ -326,14 +352,14 @@
                             </div>
                         </div>
 
-                        <aside class="home-panel home-recommend-panel">
+                        <aside class="home-panel home-discovery-panel">
                             <div class="home-panel-header compact">
                                 <div>
-                                    <span class="home-section-kicker">Descubrir</span>
-                                    <h2>Para ti</h2>
+                                    <span class="home-section-kicker">Seleccionado para ti</span>
+                                    <h2>Descubre algo nuevo</h2>
                                 </div>
-                                <button class="refresh-btn" id="refreshRecommendationsBtn" type="button" title="Actualizar recomendaciones">
-                                    <i class="fas fa-sync-alt"></i>
+                                <button class="refresh-btn" id="refreshRecommendationsBtn" type="button" title="Actualizar recomendaciones" aria-label="Actualizar recomendaciones">
+                                    <i class="fas fa-rotate-right" aria-hidden="true"></i>
                                 </button>
                             </div>
                             <div class="recommendations-container">
@@ -357,11 +383,11 @@
 
             <div id="search" class="page search-page">
                 <div class="search-workspace">
-                    <section class="search-hero" aria-labelledby="searchTitle">
+                    <section class="search-hero search-command-strip" aria-labelledby="searchTitle">
                         <div class="search-hero-copy">
                             <span class="search-eyebrow">
-                                <i class="fas fa-wave-square"></i>
-                                Buscar música
+                                <i class="fas fa-compass" aria-hidden="true"></i>
+                                Explorar
                             </span>
                             <div class="search-title-row">
                                 <h1 id="searchTitle">Buscar</h1>
@@ -370,15 +396,7 @@
                                     Listo
                                 </span>
                             </div>
-                            <p class="search-subtitle">Descubre tu nueva música favorita.</p>
-                        </div>
-                        <div class="search-hero-visual" aria-hidden="true">
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                            <span></span>
-                            <span></span>
+                            <p class="search-subtitle">Una canción, un artista o una playlist. El resto sobra.</p>
                         </div>
                     </section>
                     
@@ -458,30 +476,34 @@
                         <!-- Estado de búsqueda -->
                         <div class="search-state" id="searchState">
                             <div class="search-placeholder">
-                                <div class="search-placeholder-icon">
-                                    <i class="fas fa-search"></i>
+                                <div class="search-placeholder-intro">
+                                    <div class="search-placeholder-icon" aria-hidden="true">
+                                        <i class="fas fa-magnifying-glass"></i>
+                                    </div>
+                                    <div>
+                                        <h3>¿Qué quieres escuchar?</h3>
+                                        <p>Empieza por una idea; Lunera encuentra el sonido.</p>
+                                    </div>
                                 </div>
-                                <h3>Busca tu música favorita</h3>
-                                <p>Encuentra las canciones que te gustan</p>
                                 <div class="search-discovery-grid">
                                     <div class="search-discovery-panel">
                                         <div class="search-discovery-header">
-                                            <i class="fas fa-clock-rotate-left"></i>
+                                            <i class="fas fa-clock-rotate-left" aria-hidden="true"></i>
                                             <span>Recientes</span>
                                         </div>
                                         <div class="search-chip-list" id="searchRecentChips"></div>
                                     </div>
                                     <div class="search-discovery-panel">
                                         <div class="search-discovery-header">
-                                            <i class="fas fa-bolt"></i>
-                                            <span>Sugerencias rápidas</span>
+                                            <i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i>
+                                            <span>Prueba algo</span>
                                         </div>
                                         <div class="search-chip-list" id="searchQuickSuggestions">
                                             <button class="search-chip" type="button" data-search-query="lofi">lofi</button>
                                             <button class="search-chip" type="button" data-search-query="rock argentino">rock argentino</button>
                                             <button class="search-chip" type="button" data-search-query="pop latino">pop latino</button>
                                             <button class="search-chip" type="button" data-search-query="indie">indie</button>
-                                            <button class="search-chip" type="button" data-search-query="electronica">electronica</button>
+                                            <button class="search-chip" type="button" data-search-query="electronica">electrónica</button>
                                         </div>
                                     </div>
                                 </div>
@@ -492,150 +514,183 @@
             </div>
 
             <div id="library" class="page library-page">
-                <div class="library-workspace">
-                    <section class="library-hero" aria-labelledby="libraryTitle">
-                        <div class="library-hero-copy">
-                            <span class="library-eyebrow">
-                                <i class="fas fa-record-vinyl"></i>
-                                Archivo Lunera
-                            </span>
-                            <h1 class="library-title" id="libraryTitle">Biblioteca</h1>
-                            <p class="library-description">Playlists y favoritos en una vista rápida, densa y hecha para escritorio.</p>
+                <div class="library-workspace library-atlas">
+                    <header class="library-command-deck" aria-labelledby="libraryTitle">
+                        <div class="library-identity">
+                            <span class="library-eyebrow"><i class="fas fa-record-vinyl" aria-hidden="true"></i> Archivo Lunera</span>
+                            <div class="library-title-row">
+                                <h1 class="library-title" id="libraryTitle">Biblioteca</h1>
+                                <span class="library-collection-status"><i class="fas fa-circle" aria-hidden="true"></i> Lista</span>
+                            </div>
+                            <p class="library-description">Tu música, ordenada para volver a ella sin perder tiempo.</p>
                             <div class="library-stats" aria-label="Resumen de biblioteca">
                                 <span class="library-stat-item" id="libraryTotalSongs">0 canciones</span>
                                 <span class="library-stat-item" id="libraryTotalPlaylists">0 playlists</span>
                             </div>
-                            <div class="library-hero-actions">
-                                <button class="library-action-btn primary" id="libraryShuffleBtn" type="button" title="Mezclar biblioteca">
-                                    <i class="fas fa-shuffle"></i>
-                                    <span>Mezclar</span>
-                                </button>
-                                <button class="library-action-btn secondary" id="libraryHeroCreateBtn" type="button" title="Crear playlist">
-                                    <i class="fas fa-plus"></i>
-                                    <span>Playlist</span>
-                                </button>
-                            </div>
                         </div>
 
-                        <aside class="library-live-panel" aria-label="Actividad de biblioteca">
-                            <div class="library-spectrum" aria-hidden="true">
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                                <span></span>
-                            </div>
-                            <div class="library-live-copy">
-                                <span>Actividad</span>
-                                <strong id="librarySignalLabel">Colección lista</strong>
+                        <section class="library-metrics" aria-label="Métricas de biblioteca">
+                            <article class="library-metric-card accent-green">
+                                <i class="fas fa-music" aria-hidden="true"></i>
+                                <span>Canciones</span>
+                                <strong id="librarySongsCount">0</strong>
+                                <small>guardadas</small>
+                            </article>
+                            <article class="library-metric-card accent-cyan">
+                                <i class="fas fa-layer-group" aria-hidden="true"></i>
+                                <span>Playlists</span>
+                                <strong id="libraryPlaylistsCount">0</strong>
+                                <small>colecciones</small>
+                            </article>
+                            <article class="library-metric-card accent-coral">
+                                <i class="fas fa-heart" aria-hidden="true"></i>
+                                <span>Favoritos</span>
+                                <strong id="libraryFavoritesCount">0</strong>
+                                <small>seleccionados</small>
+                            </article>
+                        </section>
+
+                        <div class="library-hero-actions library-command-actions">
+                            <button class="library-action-btn primary" id="libraryShuffleBtn" type="button" title="Mezclar biblioteca">
+                                <i class="fas fa-shuffle" aria-hidden="true"></i>
+                                <span>Mezclar</span>
+                            </button>
+                            <button class="library-action-btn secondary" id="libraryHeroCreateBtn" type="button" title="Crear playlist">
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                <span>Playlist</span>
+                            </button>
+                        </div>
+                    </header>
+
+                    <div class="library-collection-layout">
+                        <aside class="library-sidecar">
+                            <span class="library-sidecar-label">Colección</span>
+                            <nav class="library-nav" aria-label="Secciones de biblioteca">
+                                <button class="library-nav-btn active" data-section="playlists" type="button">
+                                    <i class="fas fa-layer-group" aria-hidden="true"></i>
+                                    <span>Playlists</span>
+                                </button>
+                                <button class="library-nav-btn" data-section="favorites" type="button">
+                                    <i class="fas fa-heart" aria-hidden="true"></i>
+                                    <span>Favoritos</span>
+                                </button>
+                            </nav>
+                            <div class="library-live-panel" aria-label="Actividad de biblioteca">
+                                <span class="library-live-orb" aria-hidden="true"><i class="fas fa-wave-square"></i></span>
+                                <div class="library-live-copy">
+                                    <span>Colección activa</span>
+                                    <strong id="librarySignalLabel">Colección lista</strong>
+                                </div>
+                                <div class="library-spectrum" aria-hidden="true">
+                                    <span></span><span></span><span></span><span></span><span></span>
+                                </div>
                             </div>
                         </aside>
-                    </section>
 
-                    <section class="library-metrics" aria-label="Métricas de biblioteca">
-                        <article class="library-metric-card accent-green">
-                            <span>Canciones</span>
-                            <strong id="librarySongsCount">0</strong>
-                            <small>guardadas</small>
-                        </article>
-                        <article class="library-metric-card accent-cyan">
-                            <span>Playlists</span>
-                            <strong id="libraryPlaylistsCount">0</strong>
-                            <small>colecciones</small>
-                        </article>
-                        <article class="library-metric-card accent-coral">
-                            <span>Favoritos</span>
-                            <strong id="libraryFavoritesCount">0</strong>
-                            <small>seleccionados</small>
-                        </article>
-                    </section>
-
-                    <nav class="library-nav" aria-label="Secciones de biblioteca">
-                        <button class="library-nav-btn active" data-section="playlists" type="button">
-                            <i class="fas fa-layer-group"></i>
-                            <span>Playlists</span>
-                        </button>
-                        <button class="library-nav-btn" data-section="favorites" type="button">
-                            <i class="fas fa-heart"></i>
-                            <span>Favoritos</span>
-                        </button>
-                    </nav>
-
-                    <div class="library-content" id="libraryContentView">
-                        <section class="library-section active" id="playlistsSection">
-                            <div class="library-section-header">
-                                <div class="library-section-title">
-                                    <span class="library-section-kicker">Colecciones</span>
-                                    <h2>Playlists</h2>
+                        <div class="library-content" id="libraryContentView">
+                            <section class="library-section active" id="playlistsSection">
+                                <div class="library-section-header">
+                                    <div class="library-section-title">
+                                        <span class="library-section-kicker">Colecciones</span>
+                                        <h2>Playlists</h2>
+                                    </div>
+                                    <div class="library-section-actions">
+                                        <span class="library-section-count" id="playlistsCount">0 playlists</span>
+                                        <button class="library-create-btn" id="createPlaylistBtn" type="button" title="Crear playlist">
+                                            <i class="fas fa-plus" aria-hidden="true"></i>
+                                            <span>Crear</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="library-section-actions">
-                                    <span class="library-section-count" id="playlistsCount">0 playlists</span>
-                                    <button class="library-create-btn" id="createPlaylistBtn" type="button" title="Crear playlist">
-                                        <i class="fas fa-plus"></i>
-                                        <span>Crear</span>
-                                    </button>
+                                <div id="playlistsContainer" class="playlists-container library-card-grid">
+                                    <!-- Playlists se cargarán aquí -->
                                 </div>
-                            </div>
-                            <div id="playlistsContainer" class="playlists-container library-card-grid">
-                                <!-- Playlists se cargarán aquí -->
-                            </div>
-                        </section>
+                            </section>
 
-                        <section class="library-section" id="favoritesSection">
-                            <div class="library-section-header">
-                                <div class="library-section-title">
-                                    <span class="library-section-kicker">Selección rápida</span>
-                                    <h2>Favoritos</h2>
+                            <section class="library-section" id="favoritesSection">
+                                <div class="library-section-header">
+                                    <div class="library-section-title">
+                                        <span class="library-section-kicker">Selección rápida</span>
+                                        <h2>Favoritos</h2>
+                                    </div>
+                                    <div class="library-section-actions">
+                                        <span class="library-section-count" id="favoritesCount">0 canciones</span>
+                                        <button class="library-delete-btn" id="deleteAllFavoritesBtn" type="button" title="Eliminar favoritos" style="display: none;">
+                                            <i class="fas fa-trash" aria-hidden="true"></i>
+                                            <span>Vaciar</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="library-section-actions">
-                                    <span class="library-section-count" id="favoritesCount">0 canciones</span>
-                                    <button class="library-delete-btn" id="deleteAllFavoritesBtn" type="button" title="Eliminar favoritos" style="display: none;">
-                                        <i class="fas fa-trash"></i>
-                                        <span>Vaciar</span>
-                                    </button>
+                                <div id="favoritesContainer" class="favorites-container library-track-list">
+                                    <!-- Favoritos se cargarán aquí -->
                                 </div>
-                            </div>
-                            <div id="favoritesContainer" class="favorites-container library-track-list">
-                                <!-- Favoritos se cargarán aquí -->
-                            </div>
-                        </section>
-
+                            </section>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <div id="mymusic" class="page">
-                <!-- My Music Header -->
-                <div class="library-header">
-                    <div class="library-header-content">
-                        <div class="library-title-section">
-                            <h1 class="library-title">Mi Música</h1>
-                            <div class="library-stats">
-                                <span class="library-stat-item" id="myMusicTotalSongs">0 canciones</span>
+            <div id="mymusic" class="page my-music-page">
+                <div class="my-music-workspace">
+                    <section class="my-music-hero" aria-labelledby="myMusicTitle">
+                        <div class="my-music-hero-copy">
+                            <span class="my-music-eyebrow"><i class="fas fa-hard-drive" aria-hidden="true"></i> Colección local</span>
+                            <h1 id="myMusicTitle">Mi Música</h1>
+                            <p>Tu música guardada en Lunera, siempre lista para reproducirse incluso cuando estés sin conexión.</p>
+                            <div class="my-music-summary" aria-live="polite">
+                                <span id="myMusicTotalSongs">0 canciones guardadas</span>
+                                <span aria-hidden="true"></span>
+                                <span id="myMusicStorageInfo">0 MB en tu dispositivo</span>
                             </div>
                         </div>
-                        <div class="library-quick-actions">
-                            <button class="library-quick-btn" id="myMusicShuffleBtn">
-                                <i class="fas fa-random"></i>
+                        <div class="my-music-hero-art" aria-hidden="true">
+                            <span class="my-music-orbit orbit-one"></span>
+                            <span class="my-music-orbit orbit-two"></span>
+                            <i class="fas fa-compact-disc"></i>
+                            <span class="my-music-equalizer"><b></b><b></b><b></b><b></b><b></b></span>
+                        </div>
+                        <div class="my-music-hero-actions">
+                            <button class="my-music-action-button secondary" id="myMusicShuffleBtn" type="button">
+                                <i class="fas fa-shuffle" aria-hidden="true"></i>
                                 <span>Mezclar todo</span>
                             </button>
-                            <button class="library-quick-btn" id="uploadMusicBtn">
-                                <i class="fas fa-upload"></i>
-                                <span>Subir Música</span>
+                            <button class="my-music-action-button primary" id="uploadMusicBtn" type="button">
+                                <i class="fas fa-plus" aria-hidden="true"></i>
+                                <span>Agregar música</span>
                             </button>
                         </div>
-                    </div>
-                </div>
+                    </section>
 
-                <!-- My Music Content -->
-                <div class="my-music-content">
-                    <div class="my-music-container" id="myMusicContainer">
-                        <!-- Música local se cargarán aquí -->
-                    </div>
+                    <section class="my-music-library" aria-labelledby="myMusicCollectionTitle">
+                        <header class="my-music-library-header">
+                            <div>
+                                <span class="my-music-section-kicker">Biblioteca local</span>
+                                <h2 id="myMusicCollectionTitle">Tus canciones</h2>
+                            </div>
+                            <div class="my-music-library-tools">
+                                <label class="my-music-search" for="myMusicSearchInput">
+                                    <i class="fas fa-search" aria-hidden="true"></i>
+                                    <input id="myMusicSearchInput" type="search" placeholder="Buscar en mi música" autocomplete="off">
+                                    <button id="myMusicClearSearch" type="button" aria-label="Limpiar búsqueda" title="Limpiar búsqueda" hidden><i class="fas fa-xmark" aria-hidden="true"></i></button>
+                                </label>
+                                <label class="my-music-sort" for="myMusicSortSelect">
+                                    <span class="sr-only">Ordenar canciones</span>
+                                    <i class="fas fa-arrow-down-wide-short" aria-hidden="true"></i>
+                                    <select id="myMusicSortSelect">
+                                        <option value="recent">Más recientes</option>
+                                        <option value="title">Título, A–Z</option>
+                                        <option value="artist">Artista, A–Z</option>
+                                    </select>
+                                </label>
+                            </div>
+                        </header>
+                        <div class="my-music-list-labels" aria-hidden="true">
+                            <span>Canción</span><span>Detalles</span><span>Agregada</span><span>Acciones</span>
+                        </div>
+                        <div class="my-music-container" id="myMusicContainer">
+                            <!-- Música local se carga aquí -->
+                        </div>
+                    </section>
                 </div>
             </div>
 
@@ -951,7 +1006,7 @@
                                     </div>
                                     <div class="setting-info">
                                         <h3>Interfaz de Lunera</h3>
-                                        <p>Cambia entre la apariencia antigua y la nueva interfaz Neo</p>
+                                        <p>Elige una identidad visual para Lunera, con una experiencia estacional completa.</p>
                                     </div>
                                 </div>
                                 <div class="setting-control">
@@ -963,6 +1018,10 @@
                                         <button class="interface-mode-option" data-interface-mode="neo" type="button">
                                             <i class="fas fa-wand-magic-sparkles"></i>
                                             <span>Nueva Neo</span>
+                                        </button>
+                                        <button class="interface-mode-option interface-mode-option-halloween" data-interface-mode="halloween" type="button">
+                                            <i class="fas fa-ghost"></i>
+                                            <span>Halloween</span>
                                         </button>
                                     </div>
                                 </div>
@@ -1236,13 +1295,13 @@
                                     </div>
                                     <div class="setting-info">
                                         <h3>Restablecer Aplicación</h3>
-                                        <p>Elimina todas las playlists, canciones recientes y configuraciones</p>
+                                        <p>Elimina playlists, historial, configuraciones y toda la caché de audio</p>
                                     </div>
                                 </div>
                                 <div class="setting-control">
                                     <button id="deleteAllDataBtn" class="modern-btn danger">
                                         <i class="fas fa-exclamation-triangle"></i>
-                                        <span>Borrar Todo</span>
+                                        <span>Restablecer y borrar datos</span>
                                     </button>
                                 </div>
                             </div>
@@ -1377,13 +1436,14 @@
                                     </div>
                                     <div class="developer-tool-item">
                                         <div>
-                                            <strong>Motor de extracción de audio</strong>
-                                            <p>Si un motor falla por cambios de YouTube, podés cambiar temporalmente al otro.</p>
+                                            <strong>Motor de reproducción preferido</strong>
+                                            <p>Lunera Turbo Engine optimiza yt-dlp para iniciar música rápido; LSE queda disponible para fuentes directas y locales.</p>
                                         </div>
                                         <select id="audioExtractorSelect" class="modern-select">
-                                            <option value="auto" selected>Automático recomendado</option>
-                                            <option value="yt-dlp">yt-dlp</option>
-                                            <option value="ytdl-core">ytdl-core</option>
+                                            <option value="lte" selected>Lunera Turbo Engine (predeterminado)</option>
+                                            <option value="yt-dlp">yt-dlp tradicional</option>
+                                            <option value="lse">Lunera Stream Engine (fuentes directas)</option>
+                                            <option value="ytdl-core">ytdl-core (legado)</option>
                                         </select>
                                     </div>
                                     <div class="developer-tool-actions">
@@ -1517,6 +1577,10 @@
                         <span id="currentTrackTitle" class="track-title" title="No hay canción seleccionada">No hay canción seleccionada</span>
                         <span id="currentTrackArtist" class="track-artist" title="-">-</span>
                     </div>
+                    <div class="now-track-save">
+                        <button type="button" class="control-button" id="nowFavoriteButton" aria-label="Añadir canción actual a favoritos" title="Añadir a favoritos" aria-pressed="false" disabled><i class="far fa-heart" aria-hidden="true"></i></button>
+                        <button type="button" class="control-button" id="nowPlaylistButton" aria-label="Guardar canción actual en una playlist" title="Guardar en una playlist" disabled><i class="fas fa-plus" aria-hidden="true"></i></button>
+                    </div>
                 </section>
 
                 <section class="player-controls now-transport-panel" aria-label="Controles de reproducción">
@@ -1627,7 +1691,9 @@
 
     <script src="csp-config.js"></script>
     <script src="notification-system.js"></script>
+    <script src="services/translations.js"></script>
     <script src="background.js"></script>
+    <script src="halloween.js"></script>
     <script src="renderer.js"></script>
     </body>
 </html>

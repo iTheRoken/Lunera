@@ -1,5 +1,5 @@
 // ========================================
-// CSP Configuration for ROKEN Music App
+// CSP Configuration for Lunera
 // ========================================
 
 // Función para configurar CSP dinámicamente

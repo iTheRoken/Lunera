@@ -1,35 +1,80 @@
 const { autoUpdater } = require('electron-updater');
 
-function startAppUpdater({ app, dialog, getWindow, isNetworkEnabled, updater = autoUpdater }) {
-  if (!app.isPackaged || process.platform !== 'win32') return;
+function getReleaseNotes(releaseNotes) {
+  if (typeof releaseNotes === 'string') return releaseNotes.trim().slice(0, 12000);
+  if (!Array.isArray(releaseNotes)) return '';
+
+  return releaseNotes
+    .map((entry) => {
+      if (typeof entry === 'string') return entry;
+      if (!entry || typeof entry !== 'object') return '';
+      const note = entry.note || entry.text;
+      return typeof note === 'string' ? note : '';
+    })
+    .filter(Boolean)
+    .join('\n\n')
+    .trim()
+    .slice(0, 12000);
+}
+
+function createUpdateStatus(info = {}) {
+  return {
+    version: String(info.version || '').trim() || 'Nueva versión',
+    releaseName: String(info.releaseName || '').trim(),
+    releaseNotes: getReleaseNotes(info.releaseNotes),
+    releaseDate: String(info.releaseDate || '').trim()
+  };
+}
+
+function startAppUpdater({
+  app,
+  getWindow = () => null,
+  isNetworkEnabled = () => true,
+  updater = autoUpdater
+}) {
+  let downloadedUpdate = null;
+  let installRequested = false;
+  let checking = false;
+  let stopped = false;
+  const logError = (error) => console.error('[updates]', error.message || error);
+
+  const getStatus = () => downloadedUpdate ? { ...downloadedUpdate } : null;
+  const install = () => {
+    if (!downloadedUpdate || installRequested) return false;
+
+    installRequested = true;
+    try {
+      updater.quitAndInstall(false, true);
+      return true;
+    } catch (error) {
+      installRequested = false;
+      logError(error);
+      return false;
+    }
+  };
+
+  const controller = { getStatus, install };
+  if (!app?.isPackaged || process.platform !== 'win32') return controller;
 
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = true;
   updater.allowPrerelease = false;
   updater.allowDowngrade = false;
-  let checking = false;
-  let stopped = false;
-  const logError = (error) => console.error('[updates]', error.message || error);
 
   updater.on('error', logError);
-  updater.on('update-downloaded', async (info) => {
+  updater.on('update-downloaded', (info) => {
     if (stopped) return;
+    downloadedUpdate = createUpdateStatus(info);
+
     try {
-      const window = getWindow();
-      const options = {
-        type: 'info',
-        title: 'Actualización disponible',
-        message: `Lunera ${info.version} está lista para instalar.`,
-        detail: 'Puedes reiniciar ahora o seguir escuchando música. Se instalará al cerrar la aplicación.',
-        buttons: ['Reiniciar e instalar', 'Más tarde'],
-        defaultId: 1,
-        cancelId: 1
-      };
-      const result = window && !window.isDestroyed()
-        ? await dialog.showMessageBox(window, options)
-        : await dialog.showMessageBox(options);
-      if (!stopped && result.response === 0) updater.quitAndInstall(false, true);
-    } catch (error) { logError(error); }
+      const window = typeof getWindow === 'function' ? getWindow() : null;
+      const webContents = window && !window.isDestroyed?.() ? window.webContents : null;
+      if (webContents && !webContents.isDestroyed?.()) {
+        webContents.send('app-update:ready', getStatus());
+      }
+    } catch (error) {
+      logError(error);
+    }
   });
 
   const check = async () => {
@@ -48,6 +93,8 @@ function startAppUpdater({ app, dialog, getWindow, isNetworkEnabled, updater = a
     clearTimeout(initialTimer);
     clearInterval(interval);
   });
+
+  return controller;
 }
 
 module.exports = { startAppUpdater };
